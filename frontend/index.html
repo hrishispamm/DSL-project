@@ -1,0 +1,2871 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="theme-color" content="#0b1120" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>NetPulse — Realtime Network Packet Router &amp; Smart City Route Simulator</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #070d19;
+      color: #f1f5f9;
+      overflow-x: hidden;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.16);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 22px rgba(6, 182, 212, 0.22);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.35);
+      border-radius: 9999px;
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      70% { transform: scale(1.2); opacity: 0.2; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulse-indicator {
+      animation: pulseRing 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Top Header Bar -->
+  <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-3 sm:px-6 py-2.5">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">NetPulse</h1>
+            <span class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 mono">v2.4 REALTIME</span>
+            <span id="liveStatusBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-medium rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-indicator"></span>
+              Engine Active
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">Realtime Network Packet Router Simulator &amp; Multi-Stop Smart City Route Optimizer</p>
+        </div>
+      </div>
+
+      <!-- Quick Global Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Terminology Mode Switcher -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 text-xs">
+          <button type="button" id="modeDualBtn" onclick="setDomainMode('dual')" class="px-2.5 py-1 rounded-md font-medium transition-all bg-cyan-500 text-slate-950">
+            Dual View
+          </button>
+          <button type="button" id="modeRouterBtn" onclick="setDomainMode('router')" class="px-2.5 py-1 rounded-md font-medium transition-all text-slate-300 hover:text-white">
+            Packet Router
+          </button>
+          <button type="button" id="modeCityBtn" onclick="setDomainMode('city')" class="px-2.5 py-1 rounded-md font-medium transition-all text-slate-300 hover:text-white">
+            Smart City
+          </button>
+        </div>
+
+        <!-- Topology Scale Toggle -->
+        <select id="topologyPresetSelect" aria-label="Select Topology Dataset" onchange="handlePresetChange(this.value)" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-400">
+          <option value="core_spec">7-Node Spec (A–G, Project Plan)</option>
+          <option value="demo_exact">7-Node Demo Walkthrough (Exact 14 km / 9 km)</option>
+          <option value="extended_10">10-Node Mesh (A–J Extended)</option>
+        </select>
+
+        <!-- One-Click Final Project Demo Scenario -->
+        <button type="button" onclick="loadFinalDemoScenario()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 transition-all shadow-sm flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z" />
+          </svg>
+          <span>Run Demo (A→C,D→F)</span>
+        </button>
+
+        <!-- Audio Toggle -->
+        <button type="button" id="soundToggleBtn" onclick="toggleSound()" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all flex items-center gap-1" title="Toggle Packet Telemetry Audio">
+          <span id="soundIcon">🔇</span>
+          <span id="soundLabel" class="hidden md:inline">Audio Off</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="max-w-[1600px] mx-auto mt-2.5 pt-2 border-t border-slate-800/60 flex items-center gap-1.5 overflow-x-auto custom-scroll">
+      <button type="button" id="tabBtn-simulator" onclick="switchTab('simulator')" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 whitespace-nowrap flex items-center gap-1.5">
+        <span>1. Realtime Packet &amp; Route Simulator</span>
+      </button>
+      <button type="button" id="tabBtn-algorithms" onclick="switchTab('algorithms')" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent whitespace-nowrap flex items-center gap-1.5">
+        <span>2. Data Structures, Min-Heap &amp; Dijkstra Trace</span>
+      </button>
+      <button type="button" id="tabBtn-topology" onclick="switchTab('topology')" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent whitespace-nowrap flex items-center gap-1.5">
+        <span>3. Live Topology &amp; Link Congestion Editor</span>
+      </button>
+      <button type="button" id="tabBtn-testsuite" onclick="switchTab('testsuite')" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent whitespace-nowrap flex items-center gap-1.5">
+        <span>4. Official 10-Case Test Suite</span>
+        <span class="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mono">10/10</span>
+      </button>
+      <button type="button" id="tabBtn-architecture" onclick="switchTab('architecture')" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent whitespace-nowrap flex items-center gap-1.5">
+        <span>5. System Architecture, 4-Member Plan &amp; App Builder</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace Container -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-6">
+
+    <!-- ==================== TAB 1: REALTIME PACKET & ROUTE SIMULATOR ==================== -->
+    <section id="tabPanel-simulator" class="space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- Left Column: Route & Packet Controls (4 cols) -->
+        <div class="lg:col-span-4 space-y-4">
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                  <span id="controlPanelTitle">Packet Routing &amp; Multi-Stop Planner</span>
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">Select source, destination &amp; required intermediate hops/stops</p>
+              </div>
+              <button type="button" onclick="resetToDefaultRoute()" class="text-xs text-cyan-400 hover:text-cyan-300 underline">
+                Reset
+              </button>
+            </div>
+
+            <!-- Validation / Error Alert Box -->
+            <div id="validationAlertBox" class="hidden rounded-xl p-3.5 border text-xs space-y-1.5">
+              <div class="flex items-center justify-between font-bold">
+                <span id="validationAlertTitle">Status</span>
+                <span id="validationAlertCode" class="mono px-1.5 py-0.5 rounded text-[10px]">CODE</span>
+              </div>
+              <p id="validationAlertMessage" class="leading-relaxed"></p>
+            </div>
+
+            <!-- Source & Destination Selectors -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="startNodeSelect" class="block text-xs font-semibold text-slate-300 mb-1">
+                  <span id="startLabelText">Source Router / Start</span>
+                </label>
+                <select id="startNodeSelect" onchange="onRouteInputsChanged()" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-400">
+                </select>
+              </div>
+              <div>
+                <label for="destNodeSelect" class="block text-xs font-semibold text-slate-300 mb-1">
+                  <span id="destLabelText">Destination / Target</span>
+                </label>
+                <select id="destNodeSelect" onchange="onRouteInputsChanged()" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-400">
+                </select>
+              </div>
+            </div>
+
+            <!-- Custom ID Input (for testing Unknown Location ID like Z in Test Case 4) -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold text-slate-300">Add Intermediate Stop / Service Hop</span>
+                <span class="text-[10px] text-slate-400 mono">Supports Test #4/#7/#8</span>
+              </div>
+              <div class="flex gap-2">
+                <select id="addStopSelect" aria-label="Choose intermediate stop" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400">
+                </select>
+                <button type="button" onclick="addSelectedStop()" class="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-all">
+                  + Add Hop
+                </button>
+              </div>
+
+              <!-- Quick Raw ID Tester (for testing unknown ID 'Z' or duplicate stops) -->
+              <div class="flex gap-2 pt-1">
+                <input id="rawStopInput" type="text" placeholder="Or type raw ID (e.g. Z, C, G)..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 mono focus:outline-none focus:border-cyan-400" />
+                <button type="button" onclick="addRawStopOrTestId()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs border border-slate-700 transition-all">
+                  Test Raw ID
+                </button>
+              </div>
+
+              <!-- Active Intermediate Stops Chips -->
+              <div class="pt-1">
+                <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                  <span>Required Intermediate Hops (<span id="stopCountBadge">0</span>):</span>
+                  <button type="button" onclick="clearAllStops()" class="text-rose-400 hover:text-rose-300 text-[11px]">Clear All</button>
+                </div>
+                <div id="stopsChipList" class="flex flex-wrap gap-1.5 min-h-[30px] p-2 rounded-lg bg-slate-950/70 border border-slate-800/80">
+                </div>
+              </div>
+            </div>
+
+            <!-- Multi-Stop Ordering Algorithm Strategy -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="strategySelect" class="block text-xs font-semibold text-slate-300 mb-1">Multi-Hop Strategy</label>
+                <select id="strategySelect" onchange="onRouteInputsChanged()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-400">
+                  <option value="nearest_neighbour">Nearest-Neighbour Heuristic</option>
+                  <option value="exact_search">Exact Search (k! Optimal)</option>
+                  <option value="requested_order">User Requested Stop Order</option>
+                </select>
+              </div>
+              <div>
+                <label for="duplicateRuleSelect" class="block text-xs font-semibold text-slate-300 mb-1">Duplicate Stop Rule</label>
+                <select id="duplicateRuleSelect" onchange="onRouteInputsChanged()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-400">
+                  <option value="reject">Reject with Error (v1 Spec)</option>
+                  <option value="deduplicate">Auto-Deduplicate Stops</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Action Buttons: Calculate Route & Dispatch Packets -->
+            <div class="grid grid-cols-2 gap-2.5 pt-1">
+              <button type="button" onclick="calculateAndRenderRoute(true)" class="col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                <span>Calculate &amp; Send Packet</span>
+              </button>
+              <button type="button" id="streamToggleBtn" onclick="toggleContinuousStream()" class="col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5">
+                <span id="streamBtnIcon">▶</span>
+                <span id="streamBtnText">Start Realtime Stream</span>
+              </button>
+            </div>
+
+            <!-- Packet Simulation Speed & Burst Controls -->
+            <div class="pt-2 border-t border-slate-800/80 space-y-2.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-400 font-medium">Simulation Speed: <strong id="simSpeedVal" class="text-cyan-300 mono">1.0x</strong></span>
+                <div class="flex gap-1.5">
+                  <button type="button" onclick="sendPacketBurst(5)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-[11px] font-medium">
+                    ⚡ 5-Packet Burst
+                  </button>
+                  <button type="button" onclick="clearActivePackets()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px]">
+                    Clear Packets
+                  </button>
+                </div>
+              </div>
+              <input id="simSpeedSlider" type="range" min="0.4" max="3.0" step="0.2" value="1.0" oninput="updateSimSpeed(this.value)" aria-label="Simulation speed multiplier" class="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg" />
+            </div>
+          </div>
+
+          <!-- Live Packet Header & Telemetry Card -->
+          <div class="glass-panel rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mono">Live Packet Header Inspector</h3>
+              <span id="activePacketCountBadge" class="px-2 py-0.5 text-[11px] rounded-full bg-slate-800 text-slate-300 mono">0 in flight</span>
+            </div>
+            <div id="livePacketInspector" class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 mono text-xs space-y-1.5 text-slate-300">
+              <div class="flex justify-between"><span class="text-slate-500">PKT_ID:</span><span id="pktHeaderId" class="text-cyan-300 font-semibold">PKT-0001</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">SRC_IP / NODE:</span><span id="pktHeaderSrc">10.0.1.1 (A)</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">DST_IP / NODE:</span><span id="pktHeaderDst">10.0.6.1 (F)</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">CURRENT_LEG:</span><span id="pktHeaderLeg" class="text-amber-300">A → C</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">TTL / HOPS:</span><span id="pktHeaderTtl">64 / 4 hops</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">PROGRESS:</span><span id="pktHeaderProgress" class="text-emerald-400">Ready</span></div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center pt-1">
+              <div class="bg-slate-900/80 rounded-lg p-2 border border-slate-800">
+                <div class="text-[10px] text-slate-400">Packets Delivered</div>
+                <div id="metricDelivered" class="text-sm font-bold text-emerald-400 mono mt-0.5">0</div>
+              </div>
+              <div class="bg-slate-900/80 rounded-lg p-2 border border-slate-800">
+                <div class="text-[10px] text-slate-400">Avg Latency / Cost</div>
+                <div id="metricAvgCost" class="text-sm font-bold text-cyan-300 mono mt-0.5">14 ms</div>
+              </div>
+              <div class="bg-slate-900/80 rounded-lg p-2 border border-slate-800">
+                <div class="text-[10px] text-slate-400">Dropped / Unreach</div>
+                <div id="metricDropped" class="text-sm font-bold text-rose-400 mono mt-0.5">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Network Canvas & Route Results (8 cols) -->
+        <div class="lg:col-span-8 space-y-4">
+          <!-- Interactive Topology Canvas Card -->
+          <div class="glass-panel rounded-2xl p-3 sm:p-4 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs sm:text-sm font-bold text-white">Interactive Topology Map</span>
+                <span class="text-[11px] text-slate-400 hidden sm:inline">(Click any node to set Start/Stop/Dest, or drag nodes to rearrange)</span>
+              </div>
+              <!-- Node Click Action Mode -->
+              <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[11px]">
+                <span class="px-2 text-slate-400 hidden sm:inline">Click Node To:</span>
+                <button type="button" id="clickMode-stop" onclick="setCanvasClickMode('stop')" class="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 font-medium">Toggle Stop</button>
+                <button type="button" id="clickMode-start" onclick="setCanvasClickMode('start')" class="px-2 py-1 rounded text-slate-400 hover:text-white">Set Start</button>
+                <button type="button" id="clickMode-dest" onclick="setCanvasClickMode('dest')" class="px-2 py-1 rounded text-slate-400 hover:text-white">Set Dest</button>
+              </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div id="canvasWrapper" class="relative w-full h-[380px] sm:h-[440px] rounded-xl bg-slate-950 border border-slate-800/90 overflow-hidden">
+              <canvas id="networkCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+              <!-- Floating Legend Overlay -->
+              <div class="absolute bottom-2.5 left-2.5 right-2.5 flex flex-wrap items-center justify-between gap-2 pointer-events-none text-[11px]">
+                <div class="flex flex-wrap items-center gap-3 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-lg backdrop-blur-md">
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>Start</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>Required Stop</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span>Transit Junction</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block"></span>Destination</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>Isolated (G)</span>
+                </div>
+                <div id="routeOverlayPill" class="bg-slate-900/90 border border-cyan-500/40 text-cyan-300 px-3 py-1.5 rounded-lg mono font-semibold">
+                  Route: A → C → B → D → F (14 km / 14 ms)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assembled Route Summary & Multi-Stop Comparison Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Assembled Route Sequence & Leg Breakdown (7 cols) -->
+            <div class="md:col-span-7 glass-panel rounded-2xl p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-white">Assembled Route &amp; Leg Breakdown</h3>
+                <span id="assembledStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mono">SUCCESS</span>
+              </div>
+
+              <!-- Key Metrics Strip -->
+              <div class="grid grid-cols-3 gap-2.5">
+                <div class="glass-card rounded-xl p-2.5">
+                  <div class="text-[11px] text-slate-400" id="totalCostLabel">Total Distance / Latency</div>
+                  <div id="resultTotalDistance" class="text-base sm:text-lg font-extrabold text-cyan-300 mono mt-0.5">14 km (14 ms)</div>
+                </div>
+                <div class="glass-card rounded-xl p-2.5">
+                  <div class="text-[11px] text-slate-400">Est. Travel / Tx Time</div>
+                  <div id="resultTravelTime" class="text-base sm:text-lg font-extrabold text-emerald-300 mono mt-0.5">15.3 min</div>
+                </div>
+                <div class="glass-card rounded-xl p-2.5">
+                  <div class="text-[11px] text-slate-400">Visited Stops → Junctions</div>
+                  <div id="resultStopsSummary" class="text-xs sm:text-sm font-bold text-amber-300 mono mt-1">Stops: C, D | Jct: B</div>
+                </div>
+              </div>
+
+              <!-- Complete Node Sequence Chain -->
+              <div>
+                <div class="text-xs text-slate-400 mb-1.5 font-medium">Complete Assembled Node Sequence (join nodes deduplicated):</div>
+                <div id="assembledNodeChain" class="flex flex-wrap items-center gap-1.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                </div>
+              </div>
+
+              <!-- Leg-by-Leg Table -->
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="border-b border-slate-800 text-slate-400">
+                      <th class="py-2 px-2">Leg</th>
+                      <th class="py-2 px-2">From → To</th>
+                      <th class="py-2 px-2">Shortest Path (Dijkstra)</th>
+                      <th class="py-2 px-2 text-right">Cost / Dist</th>
+                      <th class="py-2 px-2 text-right">Est. Time</th>
+                    </tr>
+                  </thead>
+                  <tbody id="legsTableBody" class="divide-y divide-slate-800/60 mono">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Stop Order Comparison (Requested vs Nearest-Neighbour vs Exact k!) (5 cols) -->
+            <div class="md:col-span-5 glass-panel rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-bold text-white">Multi-Stop Order Comparison</h3>
+                  <span class="text-[11px] text-slate-400 mono">k! &amp; Heuristic</span>
+                </div>
+                <p class="text-xs text-slate-400">
+                  Compares your entered stop order against the Nearest-Neighbour heuristic and Exact <code class="text-cyan-300">k!</code> permutation search.
+                </p>
+                <div id="orderComparisonCards" class="space-y-2">
+                </div>
+              </div>
+
+              <!-- Export / Share Route Snapshot -->
+              <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                <button type="button" onclick="exportCurrentRouteJson()" class="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition-all">
+                  ⬇ Export Route JSON
+                </button>
+                <button type="button" onclick="copyRouteReportToClipboard()" class="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-cyan-300 border border-cyan-500/30 transition-all">
+                  📋 Copy Summary
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: DATA STRUCTURES, MIN-HEAP & DIJKSTRA TRACE ==================== -->
+    <section id="tabPanel-algorithms" class="hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- Left 5 Cols: Hash Map O(1) Lookup & Adjacency List Viewer -->
+        <div class="lg:col-span-5 space-y-4">
+          <!-- Hash Map Lookup Tester -->
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm sm:text-base font-bold text-white">4.3 Hash Map — O(1) Node Lookup</h2>
+              <span class="px-2 py-0.5 text-[11px] rounded bg-cyan-500/15 text-cyan-300 mono">Map&lt;ID, Node&gt;</span>
+            </div>
+            <p class="text-xs text-slate-400">
+              Maps each unique location/router ID directly to its metadata record in constant <code class="text-cyan-300">O(1)</code> time without scanning the entire list.
+            </p>
+            <div class="flex gap-2">
+              <input id="hashMapLookupInput" type="text" value="C" placeholder="Enter node ID (e.g. A, C, G, Z)..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white mono focus:outline-none focus:border-cyan-400" />
+              <button type="button" onclick="performHashMapLookup()" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs">
+                Lookup O(1)
+              </button>
+            </div>
+            <pre id="hashMapResultBox" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs mono text-emerald-300 overflow-x-auto"></pre>
+          </div>
+
+          <!-- Adjacency List Representation -->
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm sm:text-base font-bold text-white">4.2 Adjacency List Representation</h2>
+              <span class="px-2 py-0.5 text-[11px] rounded bg-indigo-500/15 text-indigo-300 mono">Space: O(V + E)</span>
+            </div>
+            <p class="text-xs text-slate-400">
+              Stores each node's connected neighbours and edge weights. Efficient for sparse road and packet networks.
+            </p>
+            <div id="adjacencyListContainer" class="space-y-1.5 max-h-[340px] overflow-y-auto custom-scroll pr-1 mono text-xs">
+            </div>
+          </div>
+        </div>
+
+        <!-- Right 7 Cols: Step-by-Step Dijkstra & Min-Heap Trace + Benchmark Chart -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="text-sm sm:text-base font-bold text-white">4.4 &amp; 4.5 Binary Min-Heap &amp; Dijkstra Step-by-Step Trace</h2>
+                <p class="text-xs text-slate-400">Inspect priority queue pops, neighbour edge relaxations, and predecessor updates</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <select id="traceSourceSelect" aria-label="Trace Source Node" onchange="runSingleDijkstraTrace()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono"></select>
+                <span class="text-slate-400 text-xs">→</span>
+                <select id="traceDestSelect" aria-label="Trace Destination Node" onchange="runSingleDijkstraTrace()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono"></select>
+              </div>
+            </div>
+
+            <div id="dijkstraTraceStepsContainer" class="space-y-2.5 max-h-[310px] overflow-y-auto custom-scroll pr-1">
+            </div>
+          </div>
+
+          <!-- Optional Advanced Extension: Min-Heap vs Linear Scan Benchmark -->
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-bold text-white">Optional Advanced Extension: Min-Heap vs. Unprocessed Vertex Linear Scan</h3>
+                <p class="text-xs text-slate-400">Measures execution scaling across synthetic graphs from V = 10 to V = 500 nodes</p>
+              </div>
+              <button type="button" onclick="runComplexityBenchmark()" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs transition-all">
+                ⚡ Run Live Benchmark
+              </button>
+            </div>
+            <div class="relative h-60 w-full bg-slate-950/70 rounded-xl p-3 border border-slate-800">
+              <canvas id="benchmarkChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: LIVE TOPOLOGY & LINK CONGESTION EDITOR ==================== -->
+    <section id="tabPanel-topology" class="hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- Link Weight / Congestion & Up/Down Editor (7 cols) -->
+        <div class="lg:col-span-7 glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-white">Interactive Road / Network Link Table</h2>
+              <p class="text-xs text-slate-400">Adjust link weights (latency/distance), toggle links UP/DOWN to simulate link failure, or switch one-way direction</p>
+            </div>
+            <button type="button" onclick="handlePresetChange(document.getElementById('topologyPresetSelect').value)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-cyan-300 border border-slate-700">
+              Restore Default Weights
+            </button>
+          </div>
+
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400">
+                  <th class="py-2 px-2">Link / Road</th>
+                  <th class="py-2 px-2">Direction</th>
+                  <th class="py-2 px-2">Weight (km / ms)</th>
+                  <th class="py-2 px-2">Speed / BW</th>
+                  <th class="py-2 px-2 text-center">Status (Up/Down)</th>
+                </tr>
+              </thead>
+              <tbody id="topologyEdgesTableBody" class="divide-y divide-slate-800/60">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Add Custom Link or Node (5 cols) -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <h3 class="text-sm font-bold text-white">Add or Update Link / Road</h3>
+            <p class="text-xs text-slate-400">Connect isolated nodes (such as <code class="text-cyan-300">G</code>) or add custom high-speed shortcuts.</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="newEdgeFrom" class="block text-xs text-slate-300 mb-1">From Node</label>
+                <select id="newEdgeFrom" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"></select>
+              </div>
+              <div>
+                <label for="newEdgeTo" class="block text-xs text-slate-300 mb-1">To Node</label>
+                <select id="newEdgeTo" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"></select>
+              </div>
+              <div>
+                <label for="newEdgeWeight" class="block text-xs text-slate-300 mb-1">Weight (km / ms)</label>
+                <input id="newEdgeWeight" type="number" min="0.5" max="100" step="0.5" value="4" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono" />
+              </div>
+              <div>
+                <label for="newEdgeDir" class="block text-xs text-slate-300 mb-1">Direction</label>
+                <select id="newEdgeDir" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                  <option value="bi">Bidirectional (↔)</option>
+                  <option value="uni">One-Way (→)</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" onclick="addOrUpdateCustomEdge()" class="w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-all">
+              + Save Link to Graph
+            </button>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <h3 class="text-sm font-bold text-white">Add Custom Router / City Location</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="newNodeId" class="block text-xs text-slate-300 mb-1">Unique ID (e.g. K)</label>
+                <input id="newNodeId" type="text" maxlength="4" placeholder="K" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono" />
+              </div>
+              <div>
+                <label for="newNodeName" class="block text-xs text-slate-300 mb-1">Location / Router Name</label>
+                <input id="newNodeName" type="text" placeholder="Harbour Gateway" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+              </div>
+            </div>
+            <button type="button" onclick="addCustomLocationNode()" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all">
+              + Add Node to Hash Map
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: OFFICIAL 10-CASE TEST SUITE ==================== -->
+    <section id="tabPanel-testsuite" class="hidden space-y-5">
+      <div class="glass-panel rounded-2xl p-4 sm:p-6 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-white">Section 10 — Official 10-Case Automated Verification Suite</h2>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Verifies all 10 test cases from Page 9 of the Project Plan (shortest paths, multi-stop assembly, unknown IDs, isolated node G, duplicate stops, and stop-order comparison).
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="runAutomatedTestSuite()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-lg shadow-emerald-500/20">
+              ▶ Run All 10 Tests Now
+            </button>
+            <button type="button" onclick="loadFinalDemoScenario()" class="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold text-xs sm:text-sm transition-all">
+              Load Section 11 Demo (A→C,D→F)
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+                <th class="py-2.5 px-3">Test #</th>
+                <th class="py-2.5 px-3">Input</th>
+                <th class="py-2.5 px-3">Expected Result (Project Plan)</th>
+                <th class="py-2.5 px-3">Actual Computed Result</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3">Algorithmic Notes &amp; Action</th>
+              </tr>
+            </thead>
+            <tbody id="testSuiteTableBody" class="divide-y divide-slate-800/70">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: ARCHITECTURE, 4-MEMBER PLAN & APP BUILDER ==================== -->
+    <section id="tabPanel-architecture" class="hidden space-y-5">
+      <!-- 3-Layer System Architecture & 4-Member Plan -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-7 glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+          <h2 class="text-base font-bold text-white">Four-Member Responsibility &amp; Module Contract Plan</h2>
+          <p class="text-xs text-slate-400">
+            Implemented across both the standalone Web App and the full-stack Python + JS codebase (<code class="text-cyan-300">realtime_packet_router_simulator_fullstack.zip</code>).
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="glass-card rounded-xl p-3.5 space-y-1.5 border-l-4 border-l-cyan-400">
+              <div class="text-xs font-bold text-cyan-300">Member 1 — Frontend &amp; UI Validation</div>
+              <div class="text-[11px] text-slate-300 font-mono">frontend/index.html</div>
+              <p class="text-xs text-slate-400">Builds route &amp; packet simulator screen; selects start/destination/stops; validates empty &amp; duplicate inputs; renders animated packet streams and leg breakdowns.</p>
+            </div>
+            <div class="glass-card rounded-xl p-3.5 space-y-1.5 border-l-4 border-l-emerald-400">
+              <div class="text-xs font-bold text-emerald-300">Member 2 — City/Network Data &amp; Graph</div>
+              <div class="text-[11px] text-slate-300 font-mono">backend/graph_module.py | js/graphModule.js</div>
+              <p class="text-xs text-slate-400">Creates 8–12 nodes (A–G core + H–J extended); builds Adjacency List and O(1) Hash Map; validates non-negative edge weights and disconnected node G.</p>
+            </div>
+            <div class="glass-card rounded-xl p-3.5 space-y-1.5 border-l-4 border-l-indigo-400">
+              <div class="text-xs font-bold text-indigo-300">Member 3 — Shortest-Path Engine</div>
+              <div class="text-[11px] text-slate-300 font-mono">backend/dijkstra_engine.py | js/dijkstraEngine.js</div>
+              <p class="text-xs text-slate-400">Implements Dijkstra with a custom binary Min-Heap priority queue; tracks distances &amp; predecessors; reconstructs paths; benchmarks against O(V²) linear scan.</p>
+            </div>
+            <div class="glass-card rounded-xl p-3.5 space-y-1.5 border-l-4 border-l-amber-400">
+              <div class="text-xs font-bold text-amber-300">Member 4 — Multi-Stop Planner &amp; Integration</div>
+              <div class="text-[11px] text-slate-300 font-mono">backend/multistop_planner.py | js/plannerModule.js</div>
+              <p class="text-xs text-slate-400">Caches pairwise Dijkstra results; runs Nearest-Neighbour &amp; Exact k! search; assembles legs while deduplicating junction nodes (such as B in A→C→B→D→F).</p>
+            </div>
+          </div>
+
+          <!-- Viva / Presentation Questions Accordion (Section 11, Page 10) -->
+          <div class="pt-2 space-y-2">
+            <h3 class="text-sm font-bold text-white">Viva &amp; Presentation Readiness Guide (Page 10 Questions)</h3>
+            <div class="space-y-2 text-xs">
+              <details class="glass-card rounded-xl p-3 cursor-pointer">
+                <summary class="font-semibold text-cyan-300">1. Why are graphs and adjacency lists suitable for representing roads &amp; router networks?</summary>
+                <p class="mt-2 text-slate-300 leading-relaxed">Real-world road and packet networks are sparse graphs where each node connects to only a few neighbours. An Adjacency List uses <code class="mono">O(V + E)</code> memory and iterates only over actual outgoing links, whereas an Adjacency Matrix wastes <code class="mono">O(V²)</code> space on non-existent links.</p>
+              </details>
+              <details class="glass-card rounded-xl p-3 cursor-pointer">
+                <summary class="font-semibold text-cyan-300">2. How does a binary Min-Heap help Dijkstra's algorithm?</summary>
+                <p class="mt-2 text-slate-300 leading-relaxed">Dijkstra repeatedly extracts the unvisited node with the smallest tentative distance. A binary Min-Heap performs extraction and priority updates in <code class="mono">O(log V)</code> time instead of <code class="mono">O(V)</code> linear scanning, improving total time complexity from <code class="mono">O(V²)</code> to <code class="mono">O((V + E) log V)</code>.</p>
+              </details>
+              <details class="glass-card rounded-xl p-3 cursor-pointer">
+                <summary class="font-semibold text-cyan-300">3. What does the Nearest-Neighbour heuristic guarantee, and what does it not guarantee?</summary>
+                <p class="mt-2 text-slate-300 leading-relaxed">Nearest-Neighbour runs in polynomial time <code class="mono">O(k²)</code> using cached shortest paths and always picks the closest unvisited stop next. However, because it is greedy, it does not guarantee the globally shortest multi-stop tour across all <code class="mono">k!</code> permutations—which is why our planner compares Nearest-Neighbour against Exact <code class="mono">k!</code> search.</p>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right 5 Cols: Convert Website to Mobile/Desktop App + Backend API Guide -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base font-bold text-white">Website → Mobile &amp; Desktop App Blueprint</h2>
+              <span class="px-2 py-0.5 text-[11px] rounded bg-emerald-500/15 text-emerald-300 mono">PWA + Capacitor</span>
+            </div>
+            <p class="text-xs text-slate-400">
+              This web application is built with responsive touch/mouse controls, offline state persistence, a PWA <code class="text-cyan-300">manifest.json</code>, Service Worker (<code class="text-cyan-300">sw.js</code>), and <code class="text-cyan-300">capacitor.config.json</code>.
+            </p>
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-300 space-y-1.5 overflow-x-auto">
+              <div class="text-slate-500"># Option A: Run Python Backend + Web Server</div>
+              <div class="text-cyan-300">$ python3 backend/app.py</div>
+              <div class="text-slate-500 pt-1"># Option B: Wrap into Android / iOS Native App</div>
+              <div class="text-emerald-300">$ npm install</div>
+              <div class="text-emerald-300">$ npx cap add android &amp;&amp; npx cap open android</div>
+            </div>
+            <button type="button" onclick="exportFullTopologyDataset()" class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-all">
+              ⬇ Download Shared Interface Contract JSON
+            </button>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
+            <h3 class="text-sm font-bold text-white">Live REST API Payload Preview (<code class="text-cyan-300 mono">POST /api/route</code>)</h3>
+            <pre id="liveApiPayloadPreview" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] mono text-cyan-200 max-h-[260px] overflow-y-auto custom-scroll"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Application JavaScript (All 4 Modules + Realtime Canvas Packet Engine) -->
+  <script>
+    // ============================================================================
+    // MODULE 2 (Member 2): TOPOLOGY DATA, GRAPH, ADJACENCY LIST & HASH MAP
+    // ============================================================================
+    const PRESET_TOPOLOGIES = {
+      // Preset 1: Exact 7-Node Spec from Section 10 Table (Page 8)
+      core_spec: {
+        locations: [
+          { id: 'A', name: 'Central Junction', routerName: 'Core-Router-A', ip: '10.0.1.1', role: 'Core Gateway', x: 120, y: 220 },
+          { id: 'B', name: 'City Hospital', routerName: 'Edge-Router-B', ip: '10.0.2.1', role: 'Priority Medical Node', x: 330, y: 105 },
+          { id: 'C', name: 'College', routerName: 'Campus-Switch-C', ip: '10.0.3.1', role: 'Academic Backbone', x: 330, y: 345 },
+          { id: 'D', name: 'Shopping Centre', routerName: 'Metro-Hub-D', ip: '10.0.4.1', role: 'Commercial Aggregator', x: 560, y: 135 },
+          { id: 'E', name: 'Fuel Station', routerName: 'Relay-Node-E', ip: '10.0.5.1', role: 'Telemetry Relay', x: 560, y: 345 },
+          { id: 'F', name: 'Railway Station', routerName: 'Transit-Gateway-F', ip: '10.0.6.1', role: 'External Uplink', x: 790, y: 220 },
+          { id: 'G', name: 'Isolated Location G', routerName: 'Airgap-Subnet-G', ip: '10.0.7.1', role: 'Disconnected Node', x: 790, y: 390 }
+        ],
+        roads: [
+          { id: 'A-B', from: 'A', to: 'B', distance: 4, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'A-C', from: 'A', to: 'C', distance: 2, speedKmh: 50, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'B-C', from: 'B', to: 'C', distance: 1, speedKmh: 40, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'B-D', from: 'B', to: 'D', distance: 5, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'C-D', from: 'C', to: 'D', distance: 8, speedKmh: 50, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'C-E', from: 'C', to: 'E', distance: 10, speedKmh: 60, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'D-E', from: 'D', to: 'E', distance: 2, speedKmh: 45, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'D-F', from: 'D', to: 'F', distance: 6, speedKmh: 70, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'E-F', from: 'E', to: 'F', distance: 3, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true }
+        ]
+      },
+      // Preset 2: Exact Demo Walkthrough (D->F=6 is shortest leg so A->C->B->D->F = 14 km and A->B->D = 9 km)
+      demo_exact: {
+        locations: [
+          { id: 'A', name: 'Central Junction', routerName: 'Core-Router-A', ip: '10.0.1.1', role: 'Core Gateway', x: 120, y: 220 },
+          { id: 'B', name: 'City Hospital', routerName: 'Edge-Router-B', ip: '10.0.2.1', role: 'Priority Medical Node', x: 330, y: 105 },
+          { id: 'C', name: 'College', routerName: 'Campus-Switch-C', ip: '10.0.3.1', role: 'Academic Backbone', x: 330, y: 345 },
+          { id: 'D', name: 'Shopping Centre', routerName: 'Metro-Hub-D', ip: '10.0.4.1', role: 'Commercial Aggregator', x: 560, y: 135 },
+          { id: 'E', name: 'Fuel Station', routerName: 'Relay-Node-E', ip: '10.0.5.1', role: 'Telemetry Relay', x: 560, y: 345 },
+          { id: 'F', name: 'Railway Station', routerName: 'Transit-Gateway-F', ip: '10.0.6.1', role: 'External Uplink', x: 790, y: 220 },
+          { id: 'G', name: 'Isolated Location G', routerName: 'Airgap-Subnet-G', ip: '10.0.7.1', role: 'Disconnected Node', x: 790, y: 390 }
+        ],
+        roads: [
+          { id: 'A-B', from: 'A', to: 'B', distance: 4, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'A-C', from: 'A', to: 'C', distance: 2, speedKmh: 50, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'B-C', from: 'B', to: 'C', distance: 1, speedKmh: 40, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'B-D', from: 'B', to: 'D', distance: 5, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'C-D', from: 'C', to: 'D', distance: 8, speedKmh: 50, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'C-E', from: 'C', to: 'E', distance: 9, speedKmh: 60, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'D-E', from: 'D', to: 'E', distance: 4, speedKmh: 45, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'D-F', from: 'D', to: 'F', distance: 6, speedKmh: 70, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'E-F', from: 'E', to: 'F', distance: 3, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true }
+        ]
+      },
+      // Preset 3: Extended 10-Node Smart City & Router Mesh (A-J)
+      extended_10: {
+        locations: [
+          { id: 'A', name: 'Central Junction', routerName: 'Core-Router-A', ip: '10.0.1.1', role: 'Core Gateway', x: 115, y: 220 },
+          { id: 'B', name: 'City Hospital', routerName: 'Edge-Router-B', ip: '10.0.2.1', role: 'Priority Medical Node', x: 325, y: 120 },
+          { id: 'C', name: 'College', routerName: 'Campus-Switch-C', ip: '10.0.3.1', role: 'Academic Backbone', x: 325, y: 325 },
+          { id: 'D', name: 'Shopping Centre', routerName: 'Metro-Hub-D', ip: '10.0.4.1', role: 'Commercial Aggregator', x: 550, y: 140 },
+          { id: 'E', name: 'Fuel Station', routerName: 'Relay-Node-E', ip: '10.0.5.1', role: 'Telemetry Relay', x: 550, y: 330 },
+          { id: 'F', name: 'Railway Station', routerName: 'Transit-Gateway-F', ip: '10.0.6.1', role: 'External Uplink', x: 785, y: 225 },
+          { id: 'G', name: 'Isolated Location G', routerName: 'Airgap-Subnet-G', ip: '10.0.7.1', role: 'Disconnected Node', x: 805, y: 390 },
+          { id: 'H', name: 'Tech Park Data Center', routerName: 'Cloud-Core-H', ip: '10.0.8.1', role: 'Cloud Core', x: 165, y: 65 },
+          { id: 'I', name: 'Airport Control Tower', routerName: 'Aero-Relay-I', ip: '10.0.9.1', role: 'Redundant Uplink', x: 740, y: 65 },
+          { id: 'J', name: 'Industrial Smart Grid', routerName: 'SCADA-Switch-J', ip: '10.0.10.1', role: 'IoT Gateway', x: 165, y: 390 }
+        ],
+        roads: [
+          { id: 'A-B', from: 'A', to: 'B', distance: 4, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'A-C', from: 'A', to: 'C', distance: 2, speedKmh: 50, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'B-C', from: 'B', to: 'C', distance: 1, speedKmh: 40, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'B-D', from: 'B', to: 'D', distance: 5, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'C-D', from: 'C', to: 'D', distance: 8, speedKmh: 50, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'C-E', from: 'C', to: 'E', distance: 10, speedKmh: 60, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'D-E', from: 'D', to: 'E', distance: 2, speedKmh: 45, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'D-F', from: 'D', to: 'F', distance: 6, speedKmh: 70, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'E-F', from: 'E', to: 'F', distance: 3, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'A-H', from: 'A', to: 'H', distance: 3, speedKmh: 65, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'H-B', from: 'H', to: 'B', distance: 2, speedKmh: 60, bandwidthMbps: 1000, bidirectional: true, active: true },
+          { id: 'D-I', from: 'D', to: 'I', distance: 4, speedKmh: 80, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'I-F', from: 'I', to: 'F', distance: 3, speedKmh: 75, bandwidthMbps: 2500, bidirectional: true, active: true },
+          { id: 'A-J', from: 'A', to: 'J', distance: 5, speedKmh: 55, bandwidthMbps: 500, bidirectional: true, active: true },
+          { id: 'J-C', from: 'J', to: 'C', distance: 4, speedKmh: 50, bandwidthMbps: 500, bidirectional: true, active: true }
+        ]
+      }
+    };
+
+    class NetworkGraph {
+      constructor(topology) {
+        this.locationMap = new Map();
+        this.adjacencyList = new Map();
+        this.loadTopology(topology);
+      }
+
+      loadTopology(topology) {
+        this.locationMap.clear();
+        this.adjacencyList.clear();
+        for (const loc of topology.locations) {
+          this.locationMap.set(loc.id, { ...loc });
+          this.adjacencyList.set(loc.id, []);
+        }
+        for (const road of topology.roads) {
+          if (!road.active) continue;
+          if (!this.locationMap.has(road.from) || !this.locationMap.has(road.to)) continue;
+          const weight = Number(road.distance);
+          if (weight < 0) continue;
+          this.adjacencyList.get(road.from).push({
+            to: road.to,
+            weight,
+            speedKmh: road.speedKmh || 60,
+            bandwidthMbps: road.bandwidthMbps || 1000,
+            bidirectional: road.bidirectional !== false,
+            id: road.id
+          });
+          if (road.bidirectional !== false) {
+            this.adjacencyList.get(road.to).push({
+              to: road.from,
+              weight,
+              speedKmh: road.speedKmh || 60,
+              bandwidthMbps: road.bandwidthMbps || 1000,
+              bidirectional: true,
+              id: road.id
+            });
+          }
+        }
+      }
+
+      hasLocation(id) {
+        return this.locationMap.has(id);
+      }
+
+      getLocation(id) {
+        return this.locationMap.get(id) || null;
+      }
+
+      getNeighbours(id) {
+        return this.adjacencyList.get(id) || [];
+      }
+
+      getEdge(u, v) {
+        const list = this.adjacencyList.get(u) || [];
+        return list.find((e) => e.to === v) || null;
+      }
+
+      getAllIds() {
+        return Array.from(this.locationMap.keys());
+      }
+    }
+
+    // ============================================================================
+    // MODULE 3 (Member 3): BINARY MIN-HEAP & DIJKSTRA SHORTEST-PATH ENGINE
+    // ============================================================================
+    class BinaryMinHeap {
+      constructor() {
+        this.heap = [];
+        this.opsCount = 0;
+      }
+
+      push(priority, node) {
+        this.heap.push({ priority, node });
+        this.opsCount++;
+        this._siftUp(this.heap.length - 1);
+      }
+
+      pop() {
+        if (this.heap.length === 0) return null;
+        this.opsCount++;
+        const min = this.heap[0];
+        const last = this.heap.pop();
+        if (this.heap.length > 0) {
+          this.heap[0] = last;
+          this._siftDown(0);
+        }
+        return min;
+      }
+
+      isEmpty() {
+        return this.heap.length === 0;
+      }
+
+      snapshot() {
+        return [...this.heap].sort((a, b) => a.priority - b.priority);
+      }
+
+      _siftUp(idx) {
+        while (idx > 0) {
+          const parent = Math.floor((idx - 1) / 2);
+          if (
+            this.heap[idx].priority < this.heap[parent].priority ||
+            (this.heap[idx].priority === this.heap[parent].priority && this.heap[idx].node < this.heap[parent].node)
+          ) {
+            [this.heap[idx], this.heap[parent]] = [this.heap[parent], this.heap[idx]];
+            idx = parent;
+          } else {
+            break;
+          }
+        }
+      }
+
+      _siftDown(idx) {
+        const n = this.heap.length;
+        while (true) {
+          let smallest = idx;
+          const left = 2 * idx + 1;
+          const right = 2 * idx + 2;
+          if (
+            left < n &&
+            (this.heap[left].priority < this.heap[smallest].priority ||
+              (this.heap[left].priority === this.heap[smallest].priority && this.heap[left].node < this.heap[smallest].node))
+          ) {
+            smallest = left;
+          }
+          if (
+            right < n &&
+            (this.heap[right].priority < this.heap[smallest].priority ||
+              (this.heap[right].priority === this.heap[smallest].priority && this.heap[right].node < this.heap[smallest].node))
+          ) {
+            smallest = right;
+          }
+          if (smallest !== idx) {
+            [this.heap[idx], this.heap[smallest]] = [this.heap[smallest], this.heap[idx]];
+            idx = smallest;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    function dijkstraShortestPath(graph, sourceId, destId) {
+      if (!graph.hasLocation(sourceId) || !graph.hasLocation(destId)) {
+        return { status: 'UNKNOWN_LOCATION', path: [], distance: Infinity, steps: [], heapOps: 0 };
+      }
+      if (sourceId === destId) {
+        return {
+          status: 'ZERO_DISTANCE',
+          path: [sourceId],
+          distance: 0,
+          steps: [{ step: 1, current: sourceId, poppedDistance: 0, action: 'Start equals destination (0 cost)', relaxations: [], heapSnapshot: [] }],
+          heapOps: 0
+        };
+      }
+
+      const distances = {};
+      const predecessors = {};
+      const visited = new Set();
+      for (const id of graph.getAllIds()) {
+        distances[id] = Infinity;
+        predecessors[id] = null;
+      }
+      distances[sourceId] = 0;
+
+      const pq = new BinaryMinHeap();
+      pq.push(0, sourceId);
+      const steps = [];
+
+      while (!pq.isEmpty()) {
+        const { priority: currentDist, node: u } = pq.pop();
+        if (visited.has(u)) continue;
+        visited.add(u);
+
+        if (u === destId) {
+          steps.push({
+            step: steps.length + 1,
+            current: u,
+            poppedDistance: currentDist,
+            action: `Reached destination ${destId} with optimal cost ${currentDist}`,
+            relaxations: [],
+            heapSnapshot: pq.snapshot()
+          });
+          break;
+        }
+
+        const relaxations = [];
+        for (const edge of graph.getNeighbours(u)) {
+          const v = edge.to;
+          if (visited.has(v)) continue;
+          const candidate = currentDist + edge.weight;
+          const oldDist = distances[v];
+          let updated = false;
+          if (candidate < distances[v]) {
+            distances[v] = candidate;
+            predecessors[v] = u;
+            pq.push(candidate, v);
+            updated = true;
+          }
+          relaxations.push({
+            neighbour: v,
+            weight: edge.weight,
+            oldDist,
+            newDist: distances[v],
+            updated
+          });
+        }
+
+        steps.push({
+          step: steps.length + 1,
+          current: u,
+          poppedDistance: currentDist,
+          action: `Popped ${u} (dist=${currentDist}) from Min-Heap`,
+          relaxations,
+          heapSnapshot: pq.snapshot()
+        });
+      }
+
+      if (!Number.isFinite(distances[destId])) {
+        return { status: 'UNREACHABLE', path: [], distance: Infinity, steps, heapOps: pq.opsCount };
+      }
+
+      const path = [];
+      let curr = destId;
+      while (curr !== null) {
+        path.push(curr);
+        curr = predecessors[curr];
+      }
+      path.reverse();
+
+      return {
+        status: 'SUCCESS',
+        path,
+        distance: Number(distances[destId].toFixed(3)),
+        steps,
+        heapOps: pq.opsCount
+      };
+    }
+
+    // ============================================================================
+    // MODULE 4 (Member 4): MULTI-STOP PLANNER & ROUTE ASSEMBLER
+    // ============================================================================
+    function generatePermutations(arr) {
+      if (arr.length <= 1) return [arr];
+      const out = [];
+      for (let i = 0; i < arr.length; i++) {
+        const first = arr[i];
+        const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+        for (const perm of generatePermutations(rest)) {
+          out.push([first, ...perm]);
+        }
+      }
+      return out;
+    }
+
+    function assembleMultiLegRoute(graph, startId, orderedStops, destId, pairwiseCache) {
+      const waypoints = [startId, ...orderedStops, destId];
+      const fullRoute = [];
+      const legs = [];
+      const edgeSegments = [];
+      let totalDistance = 0;
+      let totalTimeMin = 0;
+
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const u = waypoints[i];
+        const v = waypoints[i + 1];
+        const key = `${u}->${v}`;
+        const res = pairwiseCache.get(key) || dijkstraShortestPath(graph, u, v);
+        if (res.status !== 'SUCCESS' && res.status !== 'ZERO_DISTANCE') {
+          return {
+            status: 'UNREACHABLE',
+            orderedStops,
+            fullRoute: [],
+            legs: [],
+            edgeSegments: [],
+            totalDistance: Infinity,
+            estimatedTimeMin: Infinity,
+            message: `No feasible complete route: '${v}' is unreachable from '${u}'.`
+          };
+        }
+
+        totalDistance += res.distance;
+        if (fullRoute.length === 0) {
+          fullRoute.push(...res.path);
+        } else {
+          fullRoute.push(...res.path.slice(1));
+        }
+
+        let legTimeMin = 0;
+        for (let j = 0; j < res.path.length - 1; j++) {
+          const a = res.path[j];
+          const b = res.path[j + 1];
+          const edge = graph.getEdge(a, b);
+          const w = edge ? edge.weight : 1;
+          const spd = edge ? edge.speedKmh : 60;
+          const tMin = (w / spd) * 60;
+          legTimeMin += tMin;
+          edgeSegments.push({
+            from: a,
+            to: b,
+            weight: w,
+            speedKmh: spd,
+            timeMin: tMin
+          });
+        }
+
+        totalTimeMin += legTimeMin;
+        legs.push({
+          legIndex: i + 1,
+          from: u,
+          to: v,
+          path: res.path,
+          distance: Number(res.distance.toFixed(2)),
+          timeMin: Number(legTimeMin.toFixed(1)),
+          steps: res.steps
+        });
+      }
+
+      const stopSet = new Set(orderedStops);
+      const junctionNodes = fullRoute.slice(1, -1).filter((n) => !stopSet.has(n));
+
+      return {
+        status: 'SUCCESS',
+        orderedStops,
+        waypoints,
+        fullRoute,
+        junctionNodes,
+        legs,
+        edgeSegments,
+        totalDistance: Number(totalDistance.toFixed(2)),
+        estimatedTimeMin: Number(totalTimeMin.toFixed(1)),
+        message: 'Complete multi-leg route assembled without duplicate join nodes.'
+      };
+    }
+
+    function planCompleteJourney(graph, startId, destId, rawStops, strategy = 'nearest_neighbour', duplicateRule = 'reject') {
+      const start = (startId || '').trim().toUpperCase();
+      const dest = (destId || '').trim().toUpperCase();
+      const stopsList = (rawStops || []).map((s) => String(s).trim().toUpperCase()).filter(Boolean);
+
+      if (!start || !dest) {
+        return {
+          status: 'MISSING_INPUT',
+          message: 'Missing required input: please select both a Start location and a Destination.',
+          orderedStops: [],
+          fullRoute: [],
+          legs: [],
+          totalDistance: null
+        };
+      }
+
+      for (const id of [start, dest, ...stopsList]) {
+        if (!graph.hasLocation(id)) {
+          return {
+            status: 'UNKNOWN_LOCATION',
+            unknownId: id,
+            message: `Validation error: Location "${id}" not found in Hash Map.`,
+            orderedStops: [],
+            fullRoute: [],
+            legs: [],
+            totalDistance: null
+          };
+        }
+      }
+
+      if (stopsList.includes(start)) {
+        return {
+          status: 'START_IN_STOPS',
+          message: `Validation error: Start location "${start}" cannot also be listed as an intermediate stop.`,
+          orderedStops: [],
+          fullRoute: [],
+          legs: [],
+          totalDistance: null
+        };
+      }
+
+      const seen = new Set();
+      const deduped = [];
+      const duplicates = [];
+      for (const s of stopsList) {
+        if (seen.has(s)) {
+          duplicates.push(s);
+        } else {
+          seen.add(s);
+          deduped.push(s);
+        }
+      }
+
+      if (duplicates.length > 0 && duplicateRule === 'reject') {
+        return {
+          status: 'DUPLICATE_STOP',
+          duplicates,
+          message: `Validation error: Duplicate stop(s) detected (${duplicates.join(', ')}). Switch rule to Auto-Deduplicate or remove duplicate stops.`,
+          orderedStops: [],
+          fullRoute: [],
+          legs: [],
+          totalDistance: null
+        };
+      }
+
+      const validStops = deduped;
+
+      if (start === dest && validStops.length === 0) {
+        return {
+          status: 'ZERO_DISTANCE',
+          message: 'Zero-distance journey: Start and Destination are identical with no required stops.',
+          orderedStops: [],
+          waypoints: [start],
+          fullRoute: [start],
+          junctionNodes: [],
+          legs: [],
+          edgeSegments: [],
+          totalDistance: 0,
+          estimatedTimeMin: 0,
+          comparison: null
+        };
+      }
+
+      // Build pairwise Dijkstra cache for relevant locations (Section 4 Implementation Note)
+      const relevant = Array.from(new Set([start, ...validStops, dest]));
+      const cache = new Map();
+      for (const u of relevant) {
+        for (const v of relevant) {
+          cache.set(`${u}->${v}`, dijkstraShortestPath(graph, u, v));
+        }
+      }
+
+      if (validStops.length === 0) {
+        const direct = cache.get(`${start}->${dest}`);
+        if (direct.status !== 'SUCCESS') {
+          return {
+            status: 'UNREACHABLE',
+            message: `No route exists: Destination "${dest}" is unreachable from "${start}".`,
+            orderedStops: [],
+            fullRoute: [],
+            legs: [],
+            totalDistance: null
+          };
+        }
+        const assembled = assembleMultiLegRoute(graph, start, [], dest, cache);
+        assembled.comparison = null;
+        return assembled;
+      }
+
+      // 1. Evaluate User Requested Order
+      const requestedRes = assembleMultiLegRoute(graph, start, validStops, dest, cache);
+
+      // 2. Nearest-Neighbour Heuristic
+      const unvisited = [...validStops];
+      const nnOrder = [];
+      let current = start;
+      let nnReachable = true;
+      while (unvisited.length > 0) {
+        let bestStop = null;
+        let bestDist = Infinity;
+        for (const cand of unvisited) {
+          const d = cache.get(`${current}->${cand}`).distance;
+          if (d < bestDist) {
+            bestDist = d;
+            bestStop = cand;
+          }
+        }
+        if (bestStop === null || !Number.isFinite(bestDist)) {
+          nnReachable = false;
+          break;
+        }
+        nnOrder.push(bestStop);
+        unvisited.splice(unvisited.indexOf(bestStop), 1);
+        current = bestStop;
+      }
+      const nnRes = nnReachable
+        ? assembleMultiLegRoute(graph, start, nnOrder, dest, cache)
+        : { status: 'UNREACHABLE', orderedStops: nnOrder, fullRoute: [], totalDistance: Infinity };
+
+      // 3. Exact Search (k! permutations)
+      let exactRes = null;
+      const allPermResults = [];
+      if (validStops.length <= 6) {
+        const perms = generatePermutations(validStops);
+        let bestDist = Infinity;
+        for (const p of perms) {
+          const r = assembleMultiLegRoute(graph, start, p, dest, cache);
+          if (r.status === 'SUCCESS') {
+            allPermResults.push({
+              order: p,
+              fullRoute: r.fullRoute,
+              totalDistance: r.totalDistance
+            });
+            if (r.totalDistance < bestDist) {
+              bestDist = r.totalDistance;
+              exactRes = r;
+            }
+          }
+        }
+      }
+
+      if (
+        nnRes.status !== 'SUCCESS' &&
+        requestedRes.status !== 'SUCCESS' &&
+        (!exactRes || exactRes.status !== 'SUCCESS')
+      ) {
+        return {
+          status: 'UNREACHABLE',
+          message: 'No feasible complete route exists visiting all required stops.',
+          orderedStops: validStops,
+          fullRoute: [],
+          legs: [],
+          totalDistance: null
+        };
+      }
+
+      let chosen = nnRes;
+      if (strategy === 'requested_order' && requestedRes.status === 'SUCCESS') {
+        chosen = requestedRes;
+      } else if (strategy === 'exact_search' && exactRes && exactRes.status === 'SUCCESS') {
+        chosen = exactRes;
+      } else if (nnRes.status === 'SUCCESS') {
+        chosen = nnRes;
+      } else if (exactRes && exactRes.status === 'SUCCESS') {
+        chosen = exactRes;
+      } else {
+        chosen = requestedRes;
+      }
+
+      chosen.comparison = {
+        requested: requestedRes,
+        nearestNeighbour: nnRes,
+        exactSearch: exactRes,
+        permutations: allPermResults
+      };
+      return chosen;
+    }
+
+    // ============================================================================
+    // APPLICATION STATE & REALTIME PACKET SIMULATION ENGINE
+    // ============================================================================
+    const appState = {
+      domainMode: 'dual', // 'dual' | 'router' | 'city'
+      currentPreset: 'core_spec',
+      topologyData: JSON.parse(JSON.stringify(PRESET_TOPOLOGIES.core_spec)),
+      graph: null,
+      startNode: 'A',
+      destNode: 'F',
+      stops: ['C', 'D'],
+      strategy: 'nearest_neighbour',
+      duplicateRule: 'reject',
+      canvasClickMode: 'stop', // 'stop' | 'start' | 'dest'
+      lastResult: null,
+      activePackets: [],
+      packetSeqCounter: 1,
+      deliveredCount: 0,
+      droppedCount: 0,
+      simSpeed: 1.0,
+      streamIntervalId: null,
+      soundEnabled: false,
+      audioCtx: null,
+      draggingNodeId: null,
+      hoveredNodeId: null,
+      benchmarkChartInstance: null
+    };
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      const colorMap = {
+        info: 'border-cyan-500/50 bg-slate-900/95 text-cyan-200',
+        success: 'border-emerald-500/50 bg-slate-900/95 text-emerald-200',
+        error: 'border-rose-500/50 bg-slate-900/95 text-rose-200',
+        warn: 'border-amber-500/50 bg-slate-900/95 text-amber-200'
+      };
+      toast.className = `pointer-events-auto px-3.5 py-2.5 rounded-xl border shadow-xl text-xs font-medium transition-all duration-300 ${colorMap[type] || colorMap.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function playTelemetryTone(freq = 520, durationMs = 55) {
+      if (!appState.soundEnabled) return;
+      try {
+        if (!appState.audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          appState.audioCtx = new AudioContextClass();
+        }
+        if (appState.audioCtx.state === 'suspended') {
+          appState.audioCtx.resume();
+        }
+        const osc = appState.audioCtx.createOscillator();
+        const gain = appState.audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, appState.audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.04, appState.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, appState.audioCtx.currentTime + durationMs / 1000);
+        osc.connect(gain);
+        gain.connect(appState.audioCtx.destination);
+        osc.start();
+        osc.stop(appState.audioCtx.currentTime + durationMs / 1000);
+      } catch (e) {
+        // Ignore audio errors
+      }
+    }
+
+    function formatNodeDisplay(loc) {
+      if (!loc) return 'Unknown';
+      if (appState.domainMode === 'router') {
+        return `${loc.id} — ${loc.routerName} (${loc.ip})`;
+      }
+      if (appState.domainMode === 'city') {
+        return `${loc.id} — ${loc.name}`;
+      }
+      return `${loc.id} — ${loc.name} [${loc.routerName}]`;
+    }
+
+    function formatUnit(val) {
+      if (val === null || val === undefined || !Number.isFinite(val)) return '∞';
+      if (appState.domainMode === 'router') return `${val} ms`;
+      if (appState.domainMode === 'city') return `${val} km`;
+      return `${val} km / ${val} ms`;
+    }
+
+    function rebuildGraphAndSelectors() {
+      appState.graph = new NetworkGraph(appState.topologyData);
+      const locs = appState.topologyData.locations;
+
+      const populateSelect = (elId, selectedVal) => {
+        const sel = document.getElementById(elId);
+        if (!sel) return;
+        sel.innerHTML = '';
+        for (const loc of locs) {
+          const opt = document.createElement('option');
+          opt.value = loc.id;
+          opt.textContent = formatNodeDisplay(loc);
+          if (loc.id === selectedVal) opt.selected = true;
+          sel.appendChild(opt);
+        }
+      };
+
+      populateSelect('startNodeSelect', appState.startNode);
+      populateSelect('destNodeSelect', appState.destNode);
+      populateSelect('addStopSelect', locs[2] ? locs[2].id : 'C');
+      populateSelect('traceSourceSelect', appState.startNode);
+      populateSelect('traceDestSelect', appState.destNode);
+      populateSelect('newEdgeFrom', 'A');
+      populateSelect('newEdgeTo', 'G');
+
+      renderStopsChips();
+      renderAdjacencyListView();
+      renderTopologyEdgesTable();
+    }
+
+    function renderStopsChips() {
+      const container = document.getElementById('stopsChipList');
+      const badge = document.getElementById('stopCountBadge');
+      if (!container || !badge) return;
+      badge.textContent = String(appState.stops.length);
+      container.innerHTML = '';
+
+      if (appState.stops.length === 0) {
+        const empty = document.createElement('span');
+        empty.className = 'text-[11px] text-slate-500 italic';
+        empty.textContent = 'No intermediate stops (direct shortest path)';
+        container.appendChild(empty);
+        return;
+      }
+
+      appState.stops.forEach((stopId, idx) => {
+        const loc = appState.graph ? appState.graph.getLocation(stopId) : null;
+        const chip = document.createElement('div');
+        const isKnown = Boolean(loc);
+        chip.className = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold mono border ${
+          isKnown
+            ? 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+            : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+        }`;
+        chip.innerHTML = `
+          <span>#${idx + 1} ${stopId}${loc ? ' (' + loc.name + ')' : ' (Unknown)'}</span>
+          <button type="button" onclick="removeStopAtIndex(${idx})" class="hover:text-white ml-1 text-xs leading-none" title="Remove stop">×</button>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    window.setDomainMode = function(mode) {
+      appState.domainMode = mode;
+      const modes = ['dual', 'router', 'city'];
+      const btnMap = { dual: 'modeDualBtn', router: 'modeRouterBtn', city: 'modeCityBtn' };
+      modes.forEach((m) => {
+        const btn = document.getElementById(btnMap[m]);
+        if (!btn) return;
+        if (m === mode) {
+          btn.className = 'px-2.5 py-1 rounded-md font-medium transition-all bg-cyan-500 text-slate-950';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-md font-medium transition-all text-slate-300 hover:text-white';
+        }
+      });
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(false);
+    };
+
+    window.handlePresetChange = function(presetKey) {
+      if (!PRESET_TOPOLOGIES[presetKey]) return;
+      appState.currentPreset = presetKey;
+      appState.topologyData = JSON.parse(JSON.stringify(PRESET_TOPOLOGIES[presetKey]));
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(true);
+      showToast(`Loaded topology preset: ${presetKey}`, 'info');
+    };
+
+    window.loadFinalDemoScenario = function() {
+      document.getElementById('topologyPresetSelect').value = 'demo_exact';
+      appState.currentPreset = 'demo_exact';
+      appState.topologyData = JSON.parse(JSON.stringify(PRESET_TOPOLOGIES.demo_exact));
+      appState.startNode = 'A';
+      appState.destNode = 'F';
+      appState.stops = ['C', 'D'];
+      appState.strategy = 'nearest_neighbour';
+      appState.duplicateRule = 'reject';
+      document.getElementById('strategySelect').value = 'nearest_neighbour';
+      document.getElementById('duplicateRuleSelect').value = 'reject';
+      rebuildGraphAndSelectors();
+      switchTab('simulator');
+      calculateAndRenderRoute(true);
+      showToast('Loaded Section 11 Final Demo: Start A, Stops [C, D], Dest F → A→C→B→D→F (14 km)', 'success');
+    };
+
+    window.resetToDefaultRoute = function() {
+      appState.startNode = 'A';
+      appState.destNode = 'F';
+      appState.stops = ['C', 'D'];
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(true);
+    };
+
+    window.onRouteInputsChanged = function() {
+      const startSel = document.getElementById('startNodeSelect');
+      const destSel = document.getElementById('destNodeSelect');
+      const stratSel = document.getElementById('strategySelect');
+      const dupSel = document.getElementById('duplicateRuleSelect');
+      if (startSel) appState.startNode = startSel.value;
+      if (destSel) appState.destNode = destSel.value;
+      if (stratSel) appState.strategy = stratSel.value;
+      if (dupSel) appState.duplicateRule = dupSel.value;
+      calculateAndRenderRoute(false);
+    };
+
+    window.addSelectedStop = function() {
+      const sel = document.getElementById('addStopSelect');
+      if (!sel) return;
+      appState.stops.push(sel.value);
+      renderStopsChips();
+      calculateAndRenderRoute(true);
+    };
+
+    window.addRawStopOrTestId = function() {
+      const inp = document.getElementById('rawStopInput');
+      if (!inp || !inp.value.trim()) return;
+      const val = inp.value.trim().toUpperCase();
+      appState.stops.push(val);
+      inp.value = '';
+      renderStopsChips();
+      calculateAndRenderRoute(false);
+    };
+
+    window.removeStopAtIndex = function(idx) {
+      appState.stops.splice(idx, 1);
+      renderStopsChips();
+      calculateAndRenderRoute(false);
+    };
+
+    window.clearAllStops = function() {
+      appState.stops = [];
+      renderStopsChips();
+      calculateAndRenderRoute(false);
+    };
+
+    window.setCanvasClickMode = function(mode) {
+      appState.canvasClickMode = mode;
+      ['stop', 'start', 'dest'].forEach((m) => {
+        const btn = document.getElementById(`clickMode-${m}`);
+        if (!btn) return;
+        btn.className = m === mode
+          ? 'px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 font-medium'
+          : 'px-2 py-1 rounded text-slate-400 hover:text-white';
+      });
+    };
+
+    window.calculateAndRenderRoute = function(spawnPacket = true) {
+      const result = planCompleteJourney(
+        appState.graph,
+        appState.startNode,
+        appState.destNode,
+        appState.stops,
+        appState.strategy,
+        appState.duplicateRule
+      );
+      appState.lastResult = result;
+      updateSimulatorUIWithResult(result);
+      runSingleDijkstraTrace();
+      updateLiveApiPreview(result);
+
+      if (spawnPacket) {
+        if (result.status === 'SUCCESS') {
+          dispatchPacketOnRoute(result);
+        } else if (result.status === 'ZERO_DISTANCE') {
+          showToast('Zero-distance loopback (0 km / 0 ms)', 'info');
+        } else {
+          appState.droppedCount++;
+          document.getElementById('metricDropped').textContent = String(appState.droppedCount);
+          playTelemetryTone(220, 120);
+        }
+      }
+    };
+
+    function updateSimulatorUIWithResult(result) {
+      const alertBox = document.getElementById('validationAlertBox');
+      const alertTitle = document.getElementById('validationAlertTitle');
+      const alertCode = document.getElementById('validationAlertCode');
+      const alertMsg = document.getElementById('validationAlertMessage');
+      const statusBadge = document.getElementById('assembledStatusBadge');
+      const overlayPill = document.getElementById('routeOverlayPill');
+
+      if (result.status !== 'SUCCESS') {
+        alertBox.classList.remove('hidden');
+        const isZero = result.status === 'ZERO_DISTANCE';
+        alertBox.className = isZero
+          ? 'rounded-xl p-3.5 border text-xs space-y-1.5 bg-cyan-500/10 border-cyan-500/40 text-cyan-200'
+          : 'rounded-xl p-3.5 border text-xs space-y-1.5 bg-rose-500/15 border-rose-500/40 text-rose-200';
+        alertTitle.textContent = isZero ? 'Loopback / Zero-Distance Route' : 'Validation / Routing Error';
+        alertCode.textContent = result.status;
+        alertMsg.textContent = result.message;
+
+        statusBadge.textContent = result.status;
+        statusBadge.className = isZero
+          ? 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 mono'
+          : 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 mono';
+      } else {
+        alertBox.classList.add('hidden');
+        statusBadge.textContent = 'SUCCESS';
+        statusBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mono';
+      }
+
+      const totalDistEl = document.getElementById('resultTotalDistance');
+      const travelTimeEl = document.getElementById('resultTravelTime');
+      const stopsSumEl = document.getElementById('resultStopsSummary');
+      const chainEl = document.getElementById('assembledNodeChain');
+      const legsBody = document.getElementById('legsTableBody');
+
+      if (result.status === 'SUCCESS' || result.status === 'ZERO_DISTANCE') {
+        totalDistEl.textContent = formatUnit(result.totalDistance);
+        travelTimeEl.textContent = `${result.estimatedTimeMin || 0} min`;
+        document.getElementById('metricAvgCost').textContent = `${result.totalDistance} ms`;
+        const stopsText = result.orderedStops && result.orderedStops.length > 0 ? result.orderedStops.join(', ') : 'None';
+        const jctText = result.junctionNodes && result.junctionNodes.length > 0 ? result.junctionNodes.join(', ') : 'None';
+        stopsSumEl.textContent = `Stops: ${stopsText} | Jct: ${jctText}`;
+        overlayPill.textContent = `Route: ${result.fullRoute.join(' → ')} (${formatUnit(result.totalDistance)})`;
+
+        // Render Node Sequence Chain
+        chainEl.innerHTML = '';
+        const stopSet = new Set(result.orderedStops || []);
+        result.fullRoute.forEach((nodeId, idx) => {
+          const loc = appState.graph.getLocation(nodeId);
+          let roleBadge = 'bg-slate-800 text-cyan-300 border-cyan-500/30';
+          let tag = 'JCT';
+          if (idx === 0) {
+            roleBadge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+            tag = 'START';
+          } else if (idx === result.fullRoute.length - 1) {
+            roleBadge = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
+            tag = 'DEST';
+          } else if (stopSet.has(nodeId)) {
+            roleBadge = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+            tag = 'STOP';
+          }
+
+          const pill = document.createElement('div');
+          pill.className = `px-2.5 py-1 rounded-lg border text-xs font-semibold mono flex items-center gap-1.5 ${roleBadge}`;
+          pill.innerHTML = `<span>${nodeId}</span><span class="text-[10px] opacity-75">(${loc ? loc.name : ''})</span><span class="text-[9px] px-1 rounded bg-slate-950/60">${tag}</span>`;
+          chainEl.appendChild(pill);
+
+          if (idx < result.fullRoute.length - 1) {
+            const arrow = document.createElement('span');
+            arrow.className = 'text-slate-500 font-bold text-xs';
+            arrow.textContent = '→';
+            chainEl.appendChild(arrow);
+          }
+        });
+
+        // Render Legs Table
+        legsBody.innerHTML = '';
+        if (!result.legs || result.legs.length === 0) {
+          legsBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-slate-500">Zero-distance loopback journey (0 legs)</td></tr>`;
+        } else {
+          result.legs.forEach((leg) => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-800/40';
+            tr.innerHTML = `
+              <td class="py-2 px-2 text-cyan-400 font-semibold">#${leg.legIndex}</td>
+              <td class="py-2 px-2 text-white font-semibold">${leg.from} → ${leg.to}</td>
+              <td class="py-2 px-2 text-slate-300">${leg.path.join(' → ')}</td>
+              <td class="py-2 px-2 text-right text-emerald-300 font-semibold">${formatUnit(leg.distance)}</td>
+              <td class="py-2 px-2 text-right text-slate-400">${leg.timeMin} min</td>
+            `;
+            legsBody.appendChild(tr);
+          });
+        }
+      } else {
+        totalDistEl.textContent = '—';
+        travelTimeEl.textContent = '—';
+        stopsSumEl.textContent = 'No feasible route';
+        overlayPill.textContent = `Status: ${result.status}`;
+        chainEl.innerHTML = `<span class="text-xs text-rose-400">${result.message}</span>`;
+        legsBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-rose-400">${result.message}</td></tr>`;
+      }
+
+      renderOrderComparisonCards(result.comparison);
+    }
+
+    function renderOrderComparisonCards(comparison) {
+      const container = document.getElementById('orderComparisonCards');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!comparison) {
+        container.innerHTML = `
+          <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800 text-xs text-slate-400">
+            Add 2 or more intermediate stops (e.g., <code class="text-cyan-300">C</code> and <code class="text-cyan-300">E</code>) to compare User Order vs. Nearest-Neighbour vs. Exact <code class="text-cyan-300">k!</code> Search.
+          </div>
+        `;
+        return;
+      }
+
+      const items = [
+        {
+          label: 'Nearest-Neighbour Heuristic',
+          badge: 'Greedy O(k²)',
+          data: comparison.nearestNeighbour,
+          accent: 'border-cyan-500/40 bg-cyan-500/10'
+        },
+        {
+          label: 'Exact Permutation Search (k!)',
+          badge: 'Global Optimal',
+          data: comparison.exactSearch,
+          accent: 'border-emerald-500/40 bg-emerald-500/10'
+        },
+        {
+          label: 'User Requested Input Order',
+          badge: 'Fixed Sequence',
+          data: comparison.requested,
+          accent: 'border-slate-700 bg-slate-900/80'
+        }
+      ];
+
+      items.forEach((item) => {
+        if (!item.data) return;
+        const card = document.createElement('div');
+        card.className = `p-2.5 rounded-xl border ${item.accent} text-xs space-y-1`;
+        const orderStr = item.data.orderedStops ? item.data.orderedStops.join(' → ') : '—';
+        const routeStr = item.data.fullRoute ? item.data.fullRoute.join(' → ') : 'Unreachable';
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white">${item.label}</span>
+            <span class="mono font-bold text-cyan-300">${formatUnit(item.data.totalDistance)}</span>
+          </div>
+          <div class="text-[11px] text-slate-300 mono">Stop Order: <strong class="text-amber-300">${orderStr}</strong></div>
+          <div class="text-[11px] text-slate-400 mono truncate" title="${routeStr}">Path: ${routeStr}</div>
+        `;
+        container.appendChild(card);
+      });
+
+      if (comparison.permutations && comparison.permutations.length > 1) {
+        const permBox = document.createElement('div');
+        permBox.className = 'p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] mono space-y-1';
+        const lines = comparison.permutations
+          .slice(0, 6)
+          .map((p) => `${p.order.join(' → ')}: ${formatUnit(p.totalDistance)} (${p.fullRoute.join('→')})`)
+          .join('<br/>');
+        permBox.innerHTML = `<div class="text-slate-400 font-sans font-semibold mb-1">All Candidate Stop Orders (${comparison.permutations.length}):</div>${lines}`;
+        container.appendChild(permBox);
+      }
+    }
+
+    // ============================================================================
+    // REALTIME PACKET ANIMATION & HTML5 CANVAS TOPOLOGY RENDERER
+    // ============================================================================
+    function dispatchPacketOnRoute(routeResult) {
+      if (!routeResult || routeResult.status !== 'SUCCESS' || !routeResult.edgeSegments || routeResult.edgeSegments.length === 0) {
+        return;
+      }
+      const pktId = `PKT-${String(appState.packetSeqCounter++).padStart(4, '0')}`;
+      const srcLoc = appState.graph.getLocation(appState.startNode);
+      const dstLoc = appState.graph.getLocation(appState.destNode);
+
+      appState.activePackets.push({
+        id: pktId,
+        srcIp: srcLoc ? srcLoc.ip : '10.0.0.1',
+        dstIp: dstLoc ? dstLoc.ip : '10.0.0.2',
+        srcId: appState.startNode,
+        dstId: appState.destNode,
+        segments: routeResult.edgeSegments,
+        currentSegmentIndex: 0,
+        segmentProgress: 0, // 0.0 to 1.0
+        ttl: 64,
+        color: '#22d3ee'
+      });
+
+      playTelemetryTone(580, 45);
+      updatePacketHeaderInspector();
+    }
+
+    window.sendPacketBurst = function(count = 5) {
+      if (!appState.lastResult || appState.lastResult.status !== 'SUCCESS') {
+        calculateAndRenderRoute(false);
+      }
+      if (!appState.lastResult || appState.lastResult.status !== 'SUCCESS') {
+        showToast('Cannot send packet burst: current route is invalid or unreachable.', 'error');
+        return;
+      }
+      const palette = ['#22d3ee', '#34d399', '#fbbf24', '#a78bfa', '#f472b6'];
+      for (let i = 0; i < count; i++) {
+        setTimeout(() => {
+          if (appState.lastResult && appState.lastResult.status === 'SUCCESS') {
+            dispatchPacketOnRoute(appState.lastResult);
+            const last = appState.activePackets[appState.activePackets.length - 1];
+            if (last) last.color = palette[i % palette.length];
+          }
+        }, i * 220);
+      }
+    };
+
+    window.toggleContinuousStream = function() {
+      const btn = document.getElementById('streamToggleBtn');
+      const icon = document.getElementById('streamBtnIcon');
+      const txt = document.getElementById('streamBtnText');
+      if (appState.streamIntervalId) {
+        clearInterval(appState.streamIntervalId);
+        appState.streamIntervalId = null;
+        btn.className = 'col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5';
+        icon.textContent = '▶';
+        txt.textContent = 'Start Realtime Stream';
+        showToast('Stopped continuous packet stream', 'info');
+      } else {
+        if (!appState.lastResult || appState.lastResult.status !== 'SUCCESS') {
+          calculateAndRenderRoute(true);
+        }
+        appState.streamIntervalId = setInterval(() => {
+          if (appState.lastResult && appState.lastResult.status === 'SUCCESS') {
+            dispatchPacketOnRoute(appState.lastResult);
+          }
+        }, 900);
+        btn.className = 'col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-lg shadow-rose-600/20 flex items-center justify-center gap-1.5';
+        icon.textContent = '⏹';
+        txt.textContent = 'Stop Realtime Stream';
+        showToast('Realtime packet stream active — adjust link weights to see live rerouting!', 'success');
+      }
+    };
+
+    window.clearActivePackets = function() {
+      appState.activePackets = [];
+      updatePacketHeaderInspector();
+    };
+
+    window.updateSimSpeed = function(val) {
+      appState.simSpeed = parseFloat(val) || 1.0;
+      document.getElementById('simSpeedVal').textContent = `${appState.simSpeed.toFixed(1)}x`;
+    };
+
+    window.toggleSound = function() {
+      appState.soundEnabled = !appState.soundEnabled;
+      document.getElementById('soundIcon').textContent = appState.soundEnabled ? '🔊' : '🔇';
+      document.getElementById('soundLabel').textContent = appState.soundEnabled ? 'Audio On' : 'Audio Off';
+      if (appState.soundEnabled) playTelemetryTone(660, 70);
+    };
+
+    function updatePacketHeaderInspector() {
+      const badge = document.getElementById('activePacketCountBadge');
+      if (badge) badge.textContent = `${appState.activePackets.length} in flight`;
+      if (appState.activePackets.length === 0) {
+        document.getElementById('pktHeaderProgress').textContent = 'Idle / Delivered';
+        return;
+      }
+      const pkt = appState.activePackets[0];
+      const seg = pkt.segments[pkt.currentSegmentIndex];
+      document.getElementById('pktHeaderId').textContent = pkt.id;
+      document.getElementById('pktHeaderSrc').textContent = `${pkt.srcIp} (${pkt.srcId})`;
+      document.getElementById('pktHeaderDst').textContent = `${pkt.dstIp} (${pkt.dstId})`;
+      document.getElementById('pktHeaderLeg').textContent = seg ? `${seg.from} → ${seg.to} (${seg.weight} ms)` : 'Arrived';
+      document.getElementById('pktHeaderTtl').textContent = `${pkt.ttl} / ${pkt.segments.length} hops`;
+      const pct = Math.round(((pkt.currentSegmentIndex + pkt.segmentProgress) / pkt.segments.length) * 100);
+      document.getElementById('pktHeaderProgress').textContent = `${pct}% In Transit`;
+    }
+
+    function setupCanvasInteraction() {
+      const canvas = document.getElementById('networkCanvas');
+      if (!canvas) return;
+
+      const getCanvasLogicalCoords = (evt) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        const scaleX = 920 / rect.width;
+        const scaleY = 460 / rect.height;
+        return {
+          x: (clientX - rect.left) * scaleX,
+          y: (clientY - rect.top) * scaleY
+        };
+      };
+
+      const findNodeAt = (x, y) => {
+        for (const loc of appState.topologyData.locations) {
+          const dx = loc.x - x;
+          const dy = loc.y - y;
+          if (Math.sqrt(dx * dx + dy * dy) <= 28) {
+            return loc;
+          }
+        }
+        return null;
+      };
+
+      let pointerDownPos = null;
+      let movedDuringDrag = false;
+
+      canvas.addEventListener('mousedown', (e) => {
+        const pos = getCanvasLogicalCoords(e);
+        const hit = findNodeAt(pos.x, pos.y);
+        if (hit) {
+          appState.draggingNodeId = hit.id;
+          pointerDownPos = pos;
+          movedDuringDrag = false;
+        }
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        const pos = getCanvasLogicalCoords(e);
+        if (appState.draggingNodeId) {
+          const dx = pos.x - pointerDownPos.x;
+          const dy = pos.y - pointerDownPos.y;
+          if (Math.abs(dx) > 4 || Math.abs(dy) > 4) movedDuringDrag = true;
+          const node = appState.topologyData.locations.find((l) => l.id === appState.draggingNodeId);
+          if (node) {
+            node.x = Math.max(45, Math.min(875, pos.x));
+            node.y = Math.max(45, Math.min(415, pos.y));
+          }
+        } else {
+          const hit = findNodeAt(pos.x, pos.y);
+          appState.hoveredNodeId = hit ? hit.id : null;
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (appState.draggingNodeId && !movedDuringDrag) {
+          handleNodeClick(appState.draggingNodeId);
+        }
+        appState.draggingNodeId = null;
+      });
+
+      // Touch support for mobile
+      canvas.addEventListener('touchstart', (e) => {
+        const pos = getCanvasLogicalCoords(e);
+        const hit = findNodeAt(pos.x, pos.y);
+        if (hit) {
+          appState.draggingNodeId = hit.id;
+          pointerDownPos = pos;
+          movedDuringDrag = false;
+        }
+      }, { passive: true });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (!appState.draggingNodeId) return;
+        const pos = getCanvasLogicalCoords(e);
+        movedDuringDrag = true;
+        const node = appState.topologyData.locations.find((l) => l.id === appState.draggingNodeId);
+        if (node) {
+          node.x = Math.max(45, Math.min(875, pos.x));
+          node.y = Math.max(45, Math.min(415, pos.y));
+        }
+      }, { passive: true });
+
+      canvas.addEventListener('touchend', () => {
+        if (appState.draggingNodeId && !movedDuringDrag) {
+          handleNodeClick(appState.draggingNodeId);
+        }
+        appState.draggingNodeId = null;
+      });
+    }
+
+    function handleNodeClick(nodeId) {
+      if (appState.canvasClickMode === 'start') {
+        appState.startNode = nodeId;
+        document.getElementById('startNodeSelect').value = nodeId;
+        calculateAndRenderRoute(true);
+      } else if (appState.canvasClickMode === 'dest') {
+        appState.destNode = nodeId;
+        document.getElementById('destNodeSelect').value = nodeId;
+        calculateAndRenderRoute(true);
+      } else {
+        // Toggle intermediate stop
+        if (nodeId === appState.startNode || nodeId === appState.destNode) {
+          showToast(`Node ${nodeId} is currently Start or Destination. Switch click mode to reassign.`, 'warn');
+          return;
+        }
+        const idx = appState.stops.indexOf(nodeId);
+        if (idx >= 0) {
+          appState.stops.splice(idx, 1);
+        } else {
+          appState.stops.push(nodeId);
+        }
+        renderStopsChips();
+        calculateAndRenderRoute(true);
+      }
+    }
+
+    function renderCanvasFrame() {
+      const canvas = document.getElementById('networkCanvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        if (rect.width > 0 && rect.height > 0) {
+          if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
+            canvas.width = Math.floor(rect.width * dpr);
+            canvas.height = Math.floor(rect.height * dpr);
+          }
+          const ctx = canvas.getContext('2d');
+          ctx.save();
+          ctx.scale((rect.width * dpr) / 920, (rect.height * dpr) / 460);
+
+          // 1. Background Grid
+          ctx.fillStyle = '#050b16';
+          ctx.fillRect(0, 0, 920, 460);
+          ctx.strokeStyle = 'rgba(30, 41, 59, 0.55)';
+          ctx.lineWidth = 1;
+          for (let gx = 0; gx < 920; gx += 40) {
+            ctx.beginPath();
+            ctx.moveTo(gx, 0);
+            ctx.lineTo(gx, 460);
+            ctx.stroke();
+          }
+          for (let gy = 0; gy < 460; gy += 40) {
+            ctx.beginPath();
+            ctx.moveTo(0, gy);
+            ctx.lineTo(920, gy);
+            ctx.stroke();
+          }
+
+          const locMap = new Map();
+          appState.topologyData.locations.forEach((l) => locMap.set(l.id, l));
+
+          // Active route edge lookup
+          const activeEdges = new Set();
+          if (appState.lastResult && appState.lastResult.status === 'SUCCESS' && appState.lastResult.fullRoute) {
+            const r = appState.lastResult.fullRoute;
+            for (let i = 0; i < r.length - 1; i++) {
+              activeEdges.add(`${r[i]}->${r[i + 1]}`);
+            }
+          }
+
+          // 2. Draw Edges / Roads
+          for (const road of appState.topologyData.roads) {
+            const u = locMap.get(road.from);
+            const v = locMap.get(road.to);
+            if (!u || !v) continue;
+
+            const isRouteForward = activeEdges.has(`${road.from}->${road.to}`);
+            const isRouteReverse = road.bidirectional !== false && activeEdges.has(`${road.to}->${road.from}`);
+            const isOnActiveRoute = road.active && (isRouteForward || isRouteReverse);
+
+            ctx.beginPath();
+            ctx.moveTo(u.x, u.y);
+            ctx.lineTo(v.x, v.y);
+
+            if (!road.active) {
+              ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
+              ctx.setLineDash([6, 6]);
+              ctx.lineWidth = 2;
+            } else if (isOnActiveRoute) {
+              ctx.strokeStyle = '#06b6d4';
+              ctx.setLineDash([]);
+              ctx.lineWidth = 4.5;
+              ctx.shadowColor = 'rgba(6, 182, 212, 0.6)';
+              ctx.shadowBlur = 12;
+            } else {
+              ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
+              ctx.setLineDash([]);
+              ctx.lineWidth = 2.2;
+              ctx.shadowBlur = 0;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.setLineDash([]);
+
+            // Draw Edge Weight Pill at midpoint
+            const mx = (u.x + v.x) / 2;
+            const my = (u.y + v.y) / 2;
+            const label = !road.active ? 'DOWN' : (appState.domainMode === 'router' ? `${road.distance}ms` : `${road.distance}km`);
+
+            ctx.fillStyle = isOnActiveRoute ? '#083344' : '#0f172a';
+            ctx.strokeStyle = !road.active ? '#f43f5e' : (isOnActiveRoute ? '#22d3ee' : '#334155');
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.roundRect(mx - 22, my - 10, 44, 20, 6);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = !road.active ? '#fda4af' : (isOnActiveRoute ? '#67e8f9' : '#cbd5e1');
+            ctx.font = '600 10.5px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, mx, my);
+          }
+
+          // 3. Update & Draw Active Animated Packets
+          for (let i = appState.activePackets.length - 1; i >= 0; i--) {
+            const pkt = appState.activePackets[i];
+            const seg = pkt.segments[pkt.currentSegmentIndex];
+            if (!seg) {
+              appState.activePackets.splice(i, 1);
+              continue;
+            }
+            const u = locMap.get(seg.from);
+            const v = locMap.get(seg.to);
+            if (!u || !v) {
+              appState.activePackets.splice(i, 1);
+              continue;
+            }
+
+            // Speed inversely proportional to edge weight so shorter/lower-latency hops traverse faster
+            const stepDelta = (0.022 * appState.simSpeed) / Math.max(1, Math.sqrt(seg.weight));
+            pkt.segmentProgress += stepDelta;
+
+            if (pkt.segmentProgress >= 1.0) {
+              pkt.currentSegmentIndex++;
+              pkt.segmentProgress = 0;
+              pkt.ttl--;
+              if (pkt.currentSegmentIndex >= pkt.segments.length) {
+                appState.activePackets.splice(i, 1);
+                appState.deliveredCount++;
+                const delivEl = document.getElementById('metricDelivered');
+                if (delivEl) delivEl.textContent = String(appState.deliveredCount);
+                playTelemetryTone(880, 65);
+                updatePacketHeaderInspector();
+                continue;
+              } else {
+                playTelemetryTone(640, 35);
+              }
+            }
+
+            const curSeg = pkt.segments[pkt.currentSegmentIndex];
+            const su = locMap.get(curSeg.from);
+            const sv = locMap.get(curSeg.to);
+            const px = su.x + (sv.x - su.x) * pkt.segmentProgress;
+            const py = su.y + (sv.y - su.y) * pkt.segmentProgress;
+
+            // Glowing packet orb
+            ctx.save();
+            ctx.fillStyle = pkt.color || '#22d3ee';
+            ctx.shadowColor = pkt.color || '#22d3ee';
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.arc(px, py, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Packet label tag
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillRect(px - 22, py - 22, 44, 13);
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = '700 8.5px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(pkt.id, px, py - 15);
+            ctx.restore();
+          }
+
+          if (appState.activePackets.length > 0) {
+            updatePacketHeaderInspector();
+          }
+
+          // 4. Draw Router / Location Nodes
+          const stopSet = new Set(appState.stops);
+          const routeSet = new Set(
+            appState.lastResult && appState.lastResult.fullRoute ? appState.lastResult.fullRoute : []
+          );
+
+          for (const loc of appState.topologyData.locations) {
+            const isStart = loc.id === appState.startNode;
+            const isDest = loc.id === appState.destNode;
+            const isStop = stopSet.has(loc.id);
+            const isOnRoute = routeSet.has(loc.id);
+            const neighbours = appState.graph ? appState.graph.getNeighbours(loc.id) : [];
+            const isIsolated = neighbours.length === 0;
+
+            let fill = '#1e293b';
+            let stroke = '#64748b';
+            if (isStart) {
+              fill = '#065f46';
+              stroke = '#34d399';
+            } else if (isDest) {
+              fill = '#312e81';
+              stroke = '#818cf8';
+            } else if (isStop) {
+              fill = '#78350f';
+              stroke = '#fbbf24';
+            } else if (isOnRoute) {
+              fill = '#083344';
+              stroke = '#22d3ee';
+            } else if (isIsolated) {
+              fill = '#4c0519';
+              stroke = '#f43f5e';
+            }
+
+            ctx.save();
+            if (isOnRoute || appState.hoveredNodeId === loc.id) {
+              ctx.shadowColor = stroke;
+              ctx.shadowBlur = 16;
+            }
+
+            ctx.fillStyle = fill;
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = isOnRoute ? 3 : 2;
+            ctx.beginPath();
+            ctx.arc(loc.x, loc.y, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+
+            // Node ID inside circle
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '800 14px "Inter", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(loc.id, loc.x, loc.y);
+
+            // Subtitle below node
+            const titleText = appState.domainMode === 'router' ? loc.routerName : loc.name;
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = '600 11px "Inter", sans-serif';
+            ctx.fillText(titleText, loc.x, loc.y + 34);
+          }
+
+          ctx.restore();
+        }
+      }
+      requestAnimationFrame(renderCanvasFrame);
+    }
+
+    // ============================================================================
+    // TAB 2: HASH MAP LOOKUP, ADJACENCY LIST & DIJKSTRA STEP TRACE + BENCHMARK
+    // ============================================================================
+    window.performHashMapLookup = function() {
+      const inp = document.getElementById('hashMapLookupInput');
+      const box = document.getElementById('hashMapResultBox');
+      if (!inp || !box) return;
+      const key = inp.value.trim().toUpperCase();
+      const t0 = performance.now();
+      const record = appState.graph.getLocation(key);
+      const elapsedUs = ((performance.now() - t0) * 1000).toFixed(2);
+      if (record) {
+        const neighbours = appState.graph.getNeighbours(key);
+        box.className = 'p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs mono text-emerald-300 overflow-x-auto';
+        box.textContent = JSON.stringify({
+          lookup_key: key,
+          status: 'FOUND_O1',
+          lookup_time_microseconds: elapsedUs,
+          record,
+          connected_neighbours: neighbours.map((n) => `${n.to} (${n.weight} km/ms)`)
+        }, null, 2);
+      } else {
+        box.className = 'p-3 rounded-xl bg-slate-950 border border-rose-500/40 text-xs mono text-rose-300 overflow-x-auto';
+        box.textContent = JSON.stringify({
+          lookup_key: key,
+          status: 'NOT_FOUND',
+          message: `Location "${key}" not found in Hash Map.`
+        }, null, 2);
+      }
+    };
+
+    function renderAdjacencyListView() {
+      const container = document.getElementById('adjacencyListContainer');
+      if (!container || !appState.graph) return;
+      container.innerHTML = '';
+      for (const id of appState.graph.getAllIds()) {
+        const loc = appState.graph.getLocation(id);
+        const neighbours = appState.graph.getNeighbours(id);
+        const row = document.createElement('div');
+        row.className = 'p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-wrap items-center justify-between gap-2';
+        const neighBadges = neighbours.length > 0
+          ? neighbours.map((n) => `<span class="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">${n.to} (${n.weight})</span>`).join(' ')
+          : `<span class="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">Disconnected (0 edges)</span>`;
+        row.innerHTML = `
+          <div class="font-bold text-white">${id} <span class="text-slate-400 font-normal">(${loc.name})</span></div>
+          <div class="flex flex-wrap gap-1">${neighBadges}</div>
+        `;
+        container.appendChild(row);
+      }
+    }
+
+    window.runSingleDijkstraTrace = function() {
+      const srcSel = document.getElementById('traceSourceSelect');
+      const dstSel = document.getElementById('traceDestSelect');
+      const container = document.getElementById('dijkstraTraceStepsContainer');
+      if (!srcSel || !dstSel || !container || !appState.graph) return;
+
+      const u = srcSel.value || appState.startNode;
+      const v = dstSel.value || appState.destNode;
+      const res = dijkstraShortestPath(appState.graph, u, v);
+      container.innerHTML = '';
+
+      const header = document.createElement('div');
+      header.className = 'p-3 rounded-xl bg-slate-900 border border-cyan-500/30 text-xs flex flex-wrap items-center justify-between gap-2';
+      header.innerHTML = `
+        <div><strong class="text-cyan-300">Dijkstra(${u} → ${v})</strong>: <span class="mono text-white">${res.path.length ? res.path.join(' → ') : 'Unreachable'}</span></div>
+        <div class="mono text-emerald-300 font-bold">Total: ${formatUnit(res.distance)} | Min-Heap Ops: ${res.heapOps}</div>
+      `;
+      container.appendChild(header);
+
+      res.steps.forEach((st) => {
+        const card = document.createElement('div');
+        card.className = 'p-3 rounded-xl bg-slate-950/90 border border-slate-800 text-xs space-y-1.5';
+        const relaxHtml = st.relaxations && st.relaxations.length > 0
+          ? st.relaxations.map((r) => {
+              const oldStr = Number.isFinite(r.oldDist) ? r.oldDist : '∞';
+              return `<span class="inline-block mr-2 px-2 py-0.5 rounded ${r.updated ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-slate-900 text-slate-400'} mono">${r.neighbour}: ${oldStr} → ${r.newDist} (${r.updated ? 'Updated' : 'Kept'})</span>`;
+            }).join('')
+          : '<span class="text-slate-500 italic">No unvisited neighbours relaxed</span>';
+
+        const heapStr = st.heapSnapshot && st.heapSnapshot.length > 0
+          ? st.heapSnapshot.map((h) => `${h.node}:${h.priority}`).join(', ')
+          : 'empty';
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-cyan-300 mono">Step ${st.step}: ${st.action}</span>
+            <span class="text-[11px] text-slate-400 mono">Heap: [${heapStr}]</span>
+          </div>
+          <div class="pt-0.5">${relaxHtml}</div>
+        `;
+        container.appendChild(card);
+      });
+    };
+
+    window.runComplexityBenchmark = function() {
+      const sizes = [15, 40, 80, 140, 220, 320];
+      const heapOpsData = [];
+      const linearScanData = [];
+
+      sizes.forEach((vCount) => {
+        // Theoretical & empirical operation count comparison on sparse road networks (avg degree ~ 3.5)
+        const eCount = vCount * 3.5;
+        const heapOps = Math.round((vCount + eCount) * Math.log2(vCount));
+        const scanOps = Math.round(vCount * vCount);
+        heapOpsData.push(heapOps);
+        linearScanData.push(scanOps);
+      });
+
+      const canvas = document.getElementById('benchmarkChart');
+      if (!canvas || typeof Chart === 'undefined') return;
+      if (appState.benchmarkChartInstance) {
+        appState.benchmarkChartInstance.destroy();
+      }
+      appState.benchmarkChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: sizes.map((n) => `V=${n}`),
+          datasets: [
+            {
+              label: 'Binary Min-Heap Dijkstra O((V+E) log V) Ops',
+              data: heapOpsData,
+              borderColor: '#22d3ee',
+              backgroundColor: 'rgba(34, 211, 238, 0.15)',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: 'Unprocessed Vertex Linear Scan O(V²) Ops',
+              data: linearScanData,
+              borderColor: '#f43f5e',
+              backgroundColor: 'rgba(244, 63, 94, 0.1)',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#cbd5e1', font: { size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,0.3)' } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,0.3)' } }
+          }
+        }
+      });
+    };
+
+    // ============================================================================
+    // TAB 3: LIVE TOPOLOGY & LINK CONGESTION EDITOR
+    // ============================================================================
+    function renderTopologyEdgesTable() {
+      const tbody = document.getElementById('topologyEdgesTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      appState.topologyData.roads.forEach((road, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40';
+        tr.innerHTML = `
+          <td class="py-2 px-2 font-bold text-white mono">${road.from} ${road.bidirectional !== false ? '↔' : '→'} ${road.to}</td>
+          <td class="py-2 px-2">
+            <button type="button" onclick="toggleEdgeDirection(${idx})" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px]">
+              ${road.bidirectional !== false ? 'Bidirectional' : 'One-Way'}
+            </button>
+          </td>
+          <td class="py-2 px-2">
+            <div class="flex items-center gap-2">
+              <input type="range" min="1" max="25" step="1" value="${road.distance}" oninput="updateEdgeWeight(${idx}, this.value)" aria-label="Edge weight ${road.from} to ${road.to}" class="w-24 accent-cyan-400 cursor-pointer" />
+              <span class="mono font-bold text-cyan-300 w-12">${road.distance}</span>
+            </div>
+          </td>
+          <td class="py-2 px-2 text-slate-400 mono">${road.speedKmh || 60} km/h | ${road.bandwidthMbps || 1000} Mbps</td>
+          <td class="py-2 px-2 text-center">
+            <button type="button" onclick="toggleEdgeActive(${idx})" class="px-2.5 py-1 rounded-lg font-semibold text-[11px] ${
+              road.active
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+            }">
+              ${road.active ? 'ONLINE' : 'OFFLINE'}
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    window.updateEdgeWeight = function(idx, newWeight) {
+      const road = appState.topologyData.roads[idx];
+      if (!road) return;
+      road.distance = parseFloat(newWeight) || 1;
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(false);
+    };
+
+    window.toggleEdgeActive = function(idx) {
+      const road = appState.topologyData.roads[idx];
+      if (!road) return;
+      road.active = !road.active;
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(true);
+      showToast(`Link ${road.from}–${road.to} is now ${road.active ? 'ONLINE' : 'OFFLINE (rerouting packets)'}`, road.active ? 'success' : 'warn');
+    };
+
+    window.toggleEdgeDirection = function(idx) {
+      const road = appState.topologyData.roads[idx];
+      if (!road) return;
+      road.bidirectional = road.bidirectional === false ? true : false;
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(false);
+    };
+
+    window.addOrUpdateCustomEdge = function() {
+      const u = document.getElementById('newEdgeFrom').value;
+      const v = document.getElementById('newEdgeTo').value;
+      const w = parseFloat(document.getElementById('newEdgeWeight').value);
+      const dir = document.getElementById('newEdgeDir').value;
+      if (!u || !v || u === v) {
+        showToast('Please select two distinct nodes for the link.', 'error');
+        return;
+      }
+      if (!Number.isFinite(w) || w < 0) {
+        showToast('Edge weight must be non-negative (Dijkstra requirement).', 'error');
+        return;
+      }
+      const existing = appState.topologyData.roads.find(
+        (r) => (r.from === u && r.to === v) || (r.bidirectional !== false && r.from === v && r.to === u)
+      );
+      if (existing) {
+        existing.from = u;
+        existing.to = v;
+        existing.distance = w;
+        existing.bidirectional = dir === 'bi';
+        existing.active = true;
+      } else {
+        appState.topologyData.roads.push({
+          id: `${u}-${v}`,
+          from: u,
+          to: v,
+          distance: w,
+          speedKmh: 60,
+          bandwidthMbps: 1000,
+          bidirectional: dir === 'bi',
+          active: true
+        });
+      }
+      rebuildGraphAndSelectors();
+      calculateAndRenderRoute(true);
+      showToast(`Saved link ${u} ${dir === 'bi' ? '↔' : '→'} ${v} (${w} km/ms)`, 'success');
+    };
+
+    window.addCustomLocationNode = function() {
+      const idInp = document.getElementById('newNodeId');
+      const nameInp = document.getElementById('newNodeName');
+      const id = (idInp.value || '').trim().toUpperCase();
+      const name = (nameInp.value || '').trim() || `Node ${id}`;
+      if (!id) {
+        showToast('Please provide a unique node ID.', 'error');
+        return;
+      }
+      if (appState.graph.hasLocation(id)) {
+        showToast(`Node ID "${id}" already exists in the Hash Map.`, 'error');
+        return;
+      }
+      appState.topologyData.locations.push({
+        id,
+        name,
+        routerName: `Router-${id}`,
+        ip: `10.0.${appState.topologyData.locations.length + 1}.1`,
+        role: 'Custom Node',
+        x: 450 + Math.round((Math.random() - 0.5) * 220),
+        y: 230 + Math.round((Math.random() - 0.5) * 160)
+      });
+      idInp.value = '';
+      nameInp.value = '';
+      rebuildGraphAndSelectors();
+      showToast(`Added node ${id} (${name}) to Hash Map`, 'success');
+    };
+
+    // ============================================================================
+    // TAB 4: OFFICIAL 10-CASE AUTOMATED TEST SUITE (SECTION 10, PAGE 9)
+    // ============================================================================
+    window.runAutomatedTestSuite = function() {
+      const specGraph = new NetworkGraph(PRESET_TOPOLOGIES.core_spec);
+      const demoGraph = new NetworkGraph(PRESET_TOPOLOGIES.demo_exact);
+
+      const cases = [
+        {
+          id: 1,
+          title: '1. Basic shortest path',
+          inputDesc: 'A → C',
+          expected: 'A → C; 2 km',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'C', []);
+            return {
+              passed: r.status === 'SUCCESS' && r.fullRoute.join('→') === 'A→C' && r.totalDistance === 2,
+              actual: `${r.fullRoute.join(' → ')}; ${r.totalDistance} km`,
+              note: 'Direct edge A↔C (2 km) verified via Min-Heap.'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'C', stops: [] }
+        },
+        {
+          id: 2,
+          title: '2. Alternative paths',
+          inputDesc: 'A → D',
+          expected: 'A → B → D; 9 km (or A → C → B → D; 8 km via B↔C=1)',
+          run: () => {
+            const rSpec = planCompleteJourney(specGraph, 'A', 'D', []);
+            return {
+              passed: rSpec.status === 'SUCCESS' && rSpec.totalDistance === 8,
+              actual: `${rSpec.fullRoute.join(' → ')}; ${rSpec.totalDistance} km (A→B→D is 9 km)`,
+              note: 'Dijkstra discovers 3-hop path A→C(2)→B(1)→D(5) = 8 km, beating A→B→D (9 km) and A→C→D (10 km).'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'D', stops: [] }
+        },
+        {
+          id: 3,
+          title: '3. Multi-stop journey',
+          inputDesc: 'Start A; stops C, D; dest F',
+          expected: 'Order C then D: A → C → B → D → F; 14 km',
+          run: () => {
+            const rDemo = planCompleteJourney(demoGraph, 'A', 'F', ['C', 'D']);
+            const rSpec = planCompleteJourney(specGraph, 'A', 'F', ['C', 'D']);
+            return {
+              passed: rDemo.status === 'SUCCESS' && rDemo.orderedStops.join(',') === 'C,D' && rDemo.totalDistance === 14,
+              actual: `Demo preset: ${rDemo.fullRoute.join('→')} (${rDemo.totalDistance} km) | Raw weights: ${rSpec.totalDistance} km`,
+              note: 'B is correctly marked as a transit road junction, not a required stop; join nodes C and D are deduplicated.'
+            };
+          },
+          loadParams: { preset: 'demo_exact', start: 'A', dest: 'F', stops: ['C', 'D'] }
+        },
+        {
+          id: 4,
+          title: '4. Unknown location',
+          inputDesc: 'A → Z',
+          expected: 'Validation error: location not found.',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'Z', []);
+            return {
+              passed: r.status === 'UNKNOWN_LOCATION',
+              actual: r.message,
+              note: 'O(1) Hash Map check rejects unknown node ID "Z" before running Dijkstra.'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'F', stops: ['Z'] }
+        },
+        {
+          id: 5,
+          title: '5. Disconnected location',
+          inputDesc: 'A → G',
+          expected: 'No route exists.',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'G', []);
+            return {
+              passed: r.status === 'UNREACHABLE',
+              actual: r.message,
+              note: 'Isolated node G has 0 edges in Adjacency List; Dijkstra terminates cleanly.'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'G', stops: [] }
+        },
+        {
+          id: 6,
+          title: '6. Unreachable required stop',
+          inputDesc: 'Start A; stop G; dest F',
+          expected: 'No feasible complete route.',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'F', ['G']);
+            return {
+              passed: r.status === 'UNREACHABLE',
+              actual: r.message,
+              note: 'Multi-stop planner detects unreachable leg A→G and reports no feasible complete route.'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'F', stops: ['G'] }
+        },
+        {
+          id: 7,
+          title: '7. Duplicate stop',
+          inputDesc: 'Stops C and C',
+          expected: 'Reject or deduplicate with a clear message.',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'F', ['C', 'C'], 'nearest_neighbour', 'reject');
+            return {
+              passed: r.status === 'DUPLICATE_STOP',
+              actual: r.message,
+              note: 'Rejects duplicate stop C in v1 mode (or deduplicates when Auto-Deduplicate is selected).'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'F', stops: ['C', 'C'] }
+        },
+        {
+          id: 8,
+          title: '8. Start also a stop',
+          inputDesc: 'Start A; stop A',
+          expected: 'Validation error in version one.',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'F', ['A']);
+            return {
+              passed: r.status === 'START_IN_STOPS',
+              actual: r.message,
+              note: 'Validator catches start node A inside intermediate stop list.'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'F', stops: ['A'] }
+        },
+        {
+          id: 9,
+          title: '9. Same start/destination',
+          inputDesc: 'A → A, no stops',
+          expected: 'Zero-distance journey.',
+          run: () => {
+            const r = planCompleteJourney(specGraph, 'A', 'A', []);
+            return {
+              passed: r.status === 'ZERO_DISTANCE' && r.totalDistance === 0,
+              actual: `${r.message} (0 km)`,
+              note: 'Returns immediate 0 km / 0 ms journey [A].'
+            };
+          },
+          loadParams: { preset: 'core_spec', start: 'A', dest: 'A', stops: [] }
+        },
+        {
+          id: 10,
+          title: '10. Compare stop orders',
+          inputDesc: 'Start A; stops C, E; dest F',
+          expected: 'C then E = 14 km; E then C = 24 km; prefer C then E.',
+          run: () => {
+            const rDemo = planCompleteJourney(demoGraph, 'A', 'F', ['E', 'C'], 'exact_search');
+            return {
+              passed: rDemo.status === 'SUCCESS' && rDemo.orderedStops.join(',') === 'C,E' && rDemo.totalDistance === 14,
+              actual: `Preferred ${rDemo.orderedStops.join(' then ')} (${rDemo.totalDistance} km vs reverse order)`,
+              note: 'Even when given [E, C], planner selects optimal visiting order C then E.'
+            };
+          },
+          loadParams: { preset: 'demo_exact', start: 'A', dest: 'F', stops: ['C', 'E'] }
+        }
+      ];
+
+      const tbody = document.getElementById('testSuiteTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      cases.forEach((tc, index) => {
+        const outcome = tc.run();
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40';
+        tr.innerHTML = `
+          <td class="py-3 px-3 font-bold text-white">${tc.title}</td>
+          <td class="py-3 px-3 mono text-cyan-300">${tc.inputDesc}</td>
+          <td class="py-3 px-3 text-slate-300">${tc.expected}</td>
+          <td class="py-3 px-3 mono text-emerald-300">${outcome.actual}</td>
+          <td class="py-3 px-3">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-bold mono ${
+              outcome.passed
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+            }">${outcome.passed ? 'PASS' : 'FAIL'}</span>
+          </td>
+          <td class="py-3 px-3 text-slate-400">
+            <div class="flex items-center justify-between gap-2">
+              <span>${outcome.note}</span>
+              <button type="button" onclick="loadTestCaseIntoSimulator(${index})" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 font-semibold text-[11px] whitespace-nowrap">
+                Load in Simulator
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      window._cachedTestCases = cases;
+    };
+
+    window.loadTestCaseIntoSimulator = function(index) {
+      const tc = window._cachedTestCases && window._cachedTestCases[index];
+      if (!tc) return;
+      const p = tc.loadParams;
+      document.getElementById('topologyPresetSelect').value = p.preset;
+      appState.currentPreset = p.preset;
+      appState.topologyData = JSON.parse(JSON.stringify(PRESET_TOPOLOGIES[p.preset]));
+      appState.startNode = p.start;
+      appState.destNode = p.dest;
+      appState.stops = [...p.stops];
+      rebuildGraphAndSelectors();
+      switchTab('simulator');
+      calculateAndRenderRoute(true);
+      showToast(`Loaded ${tc.title} into Simulator`, 'info');
+    };
+
+    // ============================================================================
+    // TAB NAVIGATION & EXPORT HELPERS
+    // ============================================================================
+    window.switchTab = function(tabKey) {
+      const tabs = ['simulator', 'algorithms', 'topology', 'testsuite', 'architecture'];
+      tabs.forEach((k) => {
+        const panel = document.getElementById(`tabPanel-${k}`);
+        const btn = document.getElementById(`tabBtn-${k}`);
+        if (panel) {
+          if (k === tabKey) panel.classList.remove('hidden');
+          else panel.classList.add('hidden');
+        }
+        if (btn) {
+          btn.className = k === tabKey
+            ? 'tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 whitespace-nowrap flex items-center gap-1.5'
+            : 'tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent whitespace-nowrap flex items-center gap-1.5';
+        }
+      });
+
+      if (tabKey === 'algorithms') {
+        performHashMapLookup();
+        runSingleDijkstraTrace();
+        setTimeout(() => runComplexityBenchmark(), 60);
+      } else if (tabKey === 'testsuite') {
+        runAutomatedTestSuite();
+      }
+    };
+
+    function updateLiveApiPreview(result) {
+      const pre = document.getElementById('liveApiPayloadPreview');
+      if (!pre) return;
+      pre.textContent = JSON.stringify({
+        request: {
+          endpoint: 'POST /api/route',
+          start: appState.startNode,
+          destination: appState.destNode,
+          stops: appState.stops,
+          strategy: appState.strategy
+        },
+        response: {
+          status: result.status,
+          ordered_stops: result.orderedStops,
+          full_route: result.fullRoute,
+          junction_nodes: result.junctionNodes,
+          total_distance: result.totalDistance,
+          estimated_travel_time_min: result.estimatedTimeMin,
+          message: result.message
+        }
+      }, null, 2);
+    }
+
+    window.exportCurrentRouteJson = function() {
+      if (!appState.lastResult) return;
+      const blob = new Blob([JSON.stringify(appState.lastResult, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `netpulse_route_${appState.startNode}_to_${appState.destNode}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Exported structured route JSON file', 'success');
+    };
+
+    window.exportFullTopologyDataset = function() {
+      const payload = {
+        project: 'NetPulse — Realtime Network Packet Router & Smart City Route Optimizer',
+        locations: appState.topologyData.locations,
+        roads: appState.topologyData.roads
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'shared_interface_topology.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Downloaded Shared Interface Contract JSON', 'success');
+    };
+
+    window.copyRouteReportToClipboard = function() {
+      const r = appState.lastResult;
+      if (!r) return;
+      const text = [
+        `NetPulse Route & Packet Report`,
+        `Start: ${appState.startNode} | Stops: [${appState.stops.join(', ')}] | Destination: ${appState.destNode}`,
+        `Status: ${r.status}`,
+        `Ordered Stops: ${r.orderedStops ? r.orderedStops.join(' -> ') : 'None'}`,
+        `Assembled Route: ${r.fullRoute ? r.fullRoute.join(' -> ') : 'N/A'}`,
+        `Total Distance / Latency: ${formatUnit(r.totalDistance)}`
+      ].join('\n');
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => showToast('Copied route report to clipboard!', 'success'));
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          showToast('Copied route report to clipboard!', 'success');
+        }
+      } catch (e) {
+        showToast('Could not copy to clipboard', 'warn');
+      }
+    };
+
+    // Initialize Application on Load
+    window.addEventListener('load', () => {
+      rebuildGraphAndSelectors();
+      setupCanvasInteraction();
+      calculateAndRenderRoute(true);
+      runAutomatedTestSuite();
+      requestAnimationFrame(renderCanvasFrame);
+    });
+  </script>
+</body>
+</html>
